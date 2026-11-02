@@ -147,3 +147,45 @@ Work is on the local `dev` branch, created from `riteshbhirud/PBCCompiler.jl`
 - Aqua flagged constructor ambiguities from `Cyc8 <: Number`. Fixed by dropping the
   supertype and adding a typed inner constructor. Aqua is clean again.
 - Full suite: 1344/1344 pass.
+
+## V5: Canonicalization and comparison
+
+- `canonical.jl`: `canonicalize` does four things, repeated to a fixed point:
+  1. prunes items that cannot affect any outcome (`:outcomes` semantics only);
+  2. merges same-Pauli rotations across commuting items, re-absorbing Clifford results
+     into the frame through an exact rebuild;
+  3. **normalizes angles modulo Cliffords** (each unconditional constant-sign
+     non-Clifford rotation becomes angle r ∈ (0, π/4), with the Clifford remainder
+     absorbed into the frame);
+  4. orders the items by Foata layers with a key that does not depend on variable names.
+- `compare.jl`: `compare_forms` walks both canonical lists and builds the outcome map
+  (`r_in = r_out ⊕ s_in ⊕ s_out` for matched measurements). Supports `:infer`,
+  `:identity`, and explicit maps. For `:channel`, the frames must also match.
+- `types.jl`: `VerificationStatus`, `Certificate`, `Counterexample` (fully defined
+  now, filled in V7), and `VerificationResult`. `verify.jl`: `verify_compilation`
+  (two-argument and compile-it-yourself forms), with a readable `show`. A program
+  that violates the IR contract is never certified (status `UNKNOWN`, method
+  `:wellformedness`).
+- **Found and fixed an incompleteness:**
+  - The repo fixture first came out `UNKNOWN`: its normal forms differed at
+    canonical position 94.
+  - Dense POVMs (2 data qubits) showed the compiled program *is* correct (max diff
+    1.3e-14), so the gap was in the verifier.
+  - Delta debugging reduced it to `T†·T·T·S_X; M_Z`. The verifier merged T†·T and
+    kept a +T; the compiler merged T·T into S and kept the T†. They are equal because
+    T = T†·S, but the two normal forms differed.
+  - Fix: step 3 above, angle normalization modulo Cliffords. The fixture now verifies
+    `EQUIVALENT` with the identity outcome map in about 0.03 s.
+- Tests (`test_compare.jl`, 293 assertions):
+  - every compiler test circuit verifies `EQUIVALENT` via `:normal_form` with the
+    identity map: the existing compiler tests, the fixture, QFT-2 through the parser,
+    20 circuits from the compiler's own `random_test_circuit`, and 60 random
+    Clifford+T circuits;
+  - hand-built equivalent pairs: reordering, merging, splitting, merging across
+    commuting ops, Clifford through measurement, parity outcome maps
+    (`:infer` / `:identity` / explicit), classical control, `:channel` semantics;
+  - **soundness:** 200 random (circuit, mutated circuit) pairs with dense POVM ground
+    truth; `EQUIVALENT` is never returned when the POVMs differ (more than 50 pairs
+    were inequivalent, more than 10 proved equivalent);
+  - B1, B2, B3 and B4 are never certified.
+- Full suite: 1637/1637 pass.

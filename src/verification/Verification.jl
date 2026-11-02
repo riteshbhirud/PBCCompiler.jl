@@ -11,10 +11,12 @@ itself from the check.
 """
 module Verification
 
+import ..PBCCompiler
 using ..PBCCompiler: Circuit, CircuitOp
 using Moshi.Match: @match
 import QuantumClifford
 import LinearAlgebra
+import Random
 using Random: AbstractRNG, randperm
 using QuantumClifford: PauliOperator, CliffordOperator, nqubits, embed, comm
 
@@ -29,6 +31,11 @@ include("dense.jl")
 include("random_circuits.jl")
 include("cyclotomic.jl")
 include("gadgets.jl")
+include("canonical.jl")
+include("compare.jl")
+include("types.jl")
+include("oracle_dispatch.jl")
+include("verify.jl")
 
 export AffineBit, affine_var, isconstant, evaluate, substitute,
        check_wellformed, wellformedness_issues, WellformednessIssue,
@@ -37,6 +44,9 @@ export AffineBit, affine_var, isconstant, evaluate, substitute,
        VOp, LoweredProgram, lower, NFItem, NormalForm, normal_form, frame_clifford,
        random_clifford_t_circuit,
        GadgetProof, prove_reduced_gadget, synthesize_z1_clifford, LiftedGadget, GadgetFailure,
-       LiftingResult, lift_gadgets, lower_lifted
+       LiftingResult, lift_gadgets, lower_lifted,
+       CanonicalForm, canonicalize, ComparisonResult, compare_forms,
+       VerificationStatus, EQUIVALENT, NOT_EQUIVALENT, UNKNOWN,
+       Certificate, Counterexample, VerificationResult, verify_compilation
 
 end # module Verification

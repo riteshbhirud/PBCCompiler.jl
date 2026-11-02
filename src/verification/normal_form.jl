@@ -56,7 +56,8 @@ A program in rotation normal form `U = PF · F · items[end] ⋯ items[1]`:
 - `fwd`, `inv`: the Clifford frame `F` as the maps `P ↦ F P F†` and `P ↦ F† P F`;
 - `pauli_frame`: the outcome-dependent Pauli frame `PF`. Its constant part is
   folded into `F`, so every bit is linear in the outcome variables.
-- `final_var`: classical bit ⇒ variable of its final write.
+- `final_var`: classical bit ⇒ variable of its final write;
+- `var_bit`: variable ⇒ the classical bit it was written to.
 
 Use [`frame_clifford`](@ref) to get `F` as a `CliffordOperator`.
 """
@@ -67,6 +68,7 @@ struct NormalForm
     inv::PauliMap
     pauli_frame::SymbolicPauli
     final_var::Dict{Int,Int}
+    var_bit::Dict{Int,Int}
 end
 
 """
@@ -123,7 +125,7 @@ function _push_op!(b::_NFBuilder, kind::VKind, q::PauliT, angle::Rational{Int}, 
 end
 
 # Fold the constant part of the Pauli frame into the Clifford frame.
-function _finalize(b::_NFBuilder, final_var::Dict{Int,Int})
+function _finalize(b::_NFBuilder, final_var::Dict{Int,Int}, var_bit::Dict{Int,Int})
     n = b.n
     pc = PauliOperator(0x00, [b.pf.x[j].constant for j in 1:n], [b.pf.z[j].constant for j in 1:n])
     if !_isidentity(pc)
@@ -131,7 +133,7 @@ function _finalize(b::_NFBuilder, final_var::Dict{Int,Int})
         pauli_sign_conjugate_inv!(b.inv, pc)
     end
     pf = SymbolicPauli([AffineBit(false, a.vars) for a in b.pf.x], [AffineBit(false, a.vars) for a in b.pf.z])
-    NormalForm(n, b.items, b.fwd, b.inv, pf, copy(final_var))
+    NormalForm(n, b.items, b.fwd, b.inv, pf, copy(final_var), copy(var_bit))
 end
 
 """
@@ -151,7 +153,7 @@ function normal_form(prog::LoweredProgram)
     for v in prog.ops
         _push_op!(b, v.kind, v.pauli, v.angle, v.sign, v.cond, v.var, v.bit, v.src)
     end
-    _finalize(b, prog.final_var)
+    _finalize(b, prog.final_var, prog.var_bit)
 end
 
 function normal_form(c::AbstractVector{CircuitOp.Type}; n::Int = _width(c))
