@@ -120,6 +120,7 @@ function pl(m::TablePL, p::Real, d::Int)
     (pts[1][1] <= p <= pts[end][1]) ||
         throw(ArgumentError("p = $p outside the tabulated range [$(pts[1][1]), $(pts[end][1])] for d = $d"))
     i = findlast(x -> x[1] <= p, pts)
+    i === nothing && throw(ArgumentError("p = $p below the tabulated range"))
     i == length(pts) && return pts[end][2]
     (p1, y1), (p2, y2) = pts[i], pts[i + 1]
     t = (log(p) - log(p1)) / (log(p2) - log(p1))

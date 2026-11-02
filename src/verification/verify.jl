@@ -131,6 +131,7 @@ function verify_compilation(input::AbstractVector{CircuitOp.Type}, compiled::Abs
                            magic_k, outcome_map, stabilizer_trials, divergence, stats, reasons, visible_bits)
     status, method, cex = res
     if status == NOT_EQUIVALENT
+        cex isa Counterexample || error("internal: NOT_EQUIVALENT without a counterexample")
         cex = _finish_counterexample(cex, input, compiled, n; compiled_by_us = _compiled_by_us, minimize,
                                      outcome_map, semantics, magic_k, max_dense_qubits, rng, stats)
     end

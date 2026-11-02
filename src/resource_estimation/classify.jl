@@ -110,6 +110,7 @@ function classify_operations(c::AbstractVector{CircuitOp.Type}, layout::LogicalL
                              :none, "not costed", -1))
             continue
         end
+        q === nothing && error("internal: op $i has a Pauli but no qubit list")
         P = embed(N, q, p)
         support = _pauli_support(p, q)
         magic = any(>(n_data), support)

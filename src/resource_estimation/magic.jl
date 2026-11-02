@@ -126,6 +126,7 @@ The search stops early once magic states no longer cause any waiting. `table` li
 function choose_factory_count(ops::Vector{EstOp}, layout::LogicalLayout, hw::HardwareModel, spec::FactorySpec;
                               objective::Symbol = :makespan, max_factories::Int = 64, base_qubits::Int = 0)
     objective in (:makespan, :spacetime) || throw(ArgumentError("objective must be :makespan or :spacetime"))
+    max_factories >= 1 || throw(ArgumentError("max_factories must be ≥ 1"))
     nmagic = count(o -> o.consumes_magic, ops)
     nmagic == 0 && return (0, schedule_operations(ops, layout, hw; n_factories = 1, time_per_state = 0.0), Tuple{Int,Float64,Float64}[])
     best = nothing; table = Tuple{Int,Float64,Float64}[]
@@ -138,5 +139,6 @@ function choose_factory_count(ops::Vector{EstOp}, layout::LogicalLayout, hw::Har
         end
         sch.magic_waits == 0 && break
     end
+    best === nothing && error("internal: no factory count was evaluated")
     (best[1], best[2], table)
 end

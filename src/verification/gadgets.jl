@@ -253,6 +253,7 @@ function _lift_one(c, g::GadgetMatch, n_data::Int, magic_k::Int)
     jp, jq = _pauli_and_qubits(c[g.joint_index])
     _ishermitian(jp) || return GadgetFailure(g, "joint measurement Pauli is not Hermitian")
     apos = findfirst(==(g.magic_qubit), jq)
+    apos === nothing && return GadgetFailure(g, "internal: magic qubit not in the joint measurement")
     joint_letter = _letter_of(jp, apos)
     # signed data part: everything except the magic position, carrying the overall sign
     dpos = [j for j in eachindex(jq) if j != apos]

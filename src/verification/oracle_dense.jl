@@ -135,6 +135,8 @@ function dense_oracle(input::AbstractVector{CircuitOp.Type}, compiled::AbstractV
             e = if spec === :identity
                 haskey(fw_out, bit) || return nothing
                 affine_var(bit)
+            elseif !(spec isa AbstractDict)
+                throw(ArgumentError("outcome_map must be :identity, :infer or a Dict (got $spec)"))
             else
                 haskey(spec, bit) || return nothing
                 want = spec[bit]

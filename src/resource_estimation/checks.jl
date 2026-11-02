@@ -64,7 +64,7 @@ function parity_check_matrices(m::SurfaceCodeModel)
     (_rows_to_matrix(X, d^2), _rows_to_matrix(Z, d^2))
 end
 
-function _rows_to_matrix(rows, n)
+function _rows_to_matrix(rows, n::Int)
     H = falses(length(rows), n)
     for (r, s) in enumerate(rows), c in s
         H[r, c] = true
@@ -72,7 +72,7 @@ function _rows_to_matrix(rows, n)
     H
 end
 
-function _shift(n)
+function _shift(n::Int)
     S = falses(n, n)
     for i in 1:n
         S[i, mod1(i + 1, n)] = true
@@ -101,7 +101,7 @@ end
 
 function parity_check_matrices(m::GenericCSSModel)
     S = QuantumClifford.ECC.parity_checks(m.code)
-    n = QuantumClifford.nqubits(S)
+    n::Int = QuantumClifford.nqubits(S)
     rowsx = Vector{Vector{Int}}(); rowsz = Vector{Vector{Int}}()
     for r in 1:length(S)
         p = S[r]

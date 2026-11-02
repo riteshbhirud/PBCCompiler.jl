@@ -110,7 +110,7 @@ end
 # xored with `flip[op index]`), or sampled from the aggregate branch probability
 # when `sample` is set and the bit is not in `record` yet. Every other measurement is
 # hidden, and all its branches are kept. Returns the total probability of the record.
-function _gs_run(c, N, st0, visible::Dict{Int,Int}, flip::Dict{Int,Bool}, record::Dict{Int,Bool},
+function _gs_run(c, N::Int, st0, visible::Dict{Int,Int}, flip::Dict{Int,Bool}, record::Dict{Int,Bool},
                  sample::Bool, rng, max_branches::Int)
     branches = [(st0, Dict{Int,Bool}())]
     for (i, op) in enumerate(c)

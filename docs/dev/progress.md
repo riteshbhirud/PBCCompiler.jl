@@ -522,3 +522,88 @@ Work is on the local `dev` branch, created from `riteshbhirud/PBCCompiler.jl`
   pages were extracted and run: the estimator example produces an estimate (1479
   qubits at d = 7, failure 0.24%), and the verifier example returns
   `EQUIVALENT`/`:normal_form` with 6 per-pass results.
+
+## F: Final pass
+
+- **JET** (`test/projects/jet` environment, `report_package` per module):
+  - Verification: 0 reports; ResourceEstimation: 1; GadgetShapes: 0.
+  - The first run found 14 reports. All were triaged and fixed: possible `nothing`
+    values made explicit, an unknown outcome-map Symbol now throws a clear error,
+    `max_factories < 1` is rejected, `_shift(n::Int)` is annotated, and so on.
+  - The remaining report is expected: `QuantumClifford.ECC.build_adapter` exists only
+    with the adapter fork, and is reached only after the runtime
+    `adapters_available()` check.
+- **Type stability:** `code_warntype` on the core loops is clean (no `Any` and no
+  non-`Nothing` unions): `apply_map`, `rotate!`, `commutation_parity`,
+  `mul_conditional!`, the `AffineBit` xor, `pauli_mul!`, `apply_rotation!`,
+  `_push_op!`, `dependency_dag`, `schedule_operations`.
+- **Aqua:** clean (part of the suite).
+- **Docs:** they build, and the examples on both pages and in the README run.
+- **README:** the repository had none. `README.md` now describes the package and both
+  subsystems.
+- **Full suite:** 2411 passed, 1 broken. The broken one is the intended `@test_skip`
+  of the E5 construction tests when the adapter fork is absent. With the fork, the
+  E5 and E9 items pass 47/47.
+
+## Summary
+
+Everything is on the local `dev` branch, one or more commits per milestone. Nothing
+was pushed.
+
+**Verifier** (`src/verification/`, plus `src/gadget_shapes.jl`):
+- Pipeline: well-formedness checks → exact gadget proofs in Q(ζ₈) → rotation normal
+  form with symbolic Pauli frames → canonicalization (pruning, merging, angle
+  normalization modulo Cliffords, Foata order) → a sound equivalence decision with an
+  inferred, identity, or explicit outcome map → dense and stabilizer oracles for
+  refutation → minimized, dense-confirmed counterexamples → per-pass translation
+  validation.
+- It certifies the repo fixture (121 T gates), QFT-2, the compiler's own test
+  circuits, approximate QFT-16, and Cuccaro adders up to 70 T gates.
+- 0 contradictions in 3000 random cross-checks against dense ground truth; 100%
+  detection of 958 channel-changing mutants with 0 false refutations.
+
+**Resource estimator** (`src/resource_estimation/`):
+- Layout and interaction packing; surface, BB and generic code models (every default
+  sourced); classification; analytic and constructed adapters; hardware embedding;
+  a dependency-aware scheduler; factories; the error budget; distance optimization;
+  report and Dict export.
+- Validated against hand computations and against GoSC's worked example: time
+  matches, qubits are +25%, and the gaps are explained.
+
+**Compiler bugs found** (`docs/NOTES_FOR_COMPILER.md`), all reproduced:
+- B1: reversed CNOT;
+- B2: unsorted multi-qubit T gate, with a precise characterization of when it bites;
+- B3: gadget bit collisions;
+- B4: a circuit with no measurement crashes;
+- B5: `UndefVarError` in `validate_CircuitOp`;
+- B6: `ccx` parsed as a parity-controlled X.
+`verify_passes` localizes B1 and B2 to the exact pass.
+
+**Upstream findings:**
+- QuantumClifford 0.11.8 `apply!(::GeneralizedStabilizer, ::PauliChannel)` throws
+  `DomainError` for channel Paulis with a −1 sign;
+- adapter PR #742: the inter-code `build_adapter` rejects unequal-length logical
+  supports, and the two-gross merge reaches Z-check weight 12 with non-minimal
+  representatives.
+
+## Known limitations
+
+- The normal form is incomplete outside the rewrites listed in the verification docs.
+  The dense oracle (≤ 10 qubits) and the stabilizer oracle (randomized, refutation
+  only) cover part of the gap; the rest is `UNKNOWN`.
+- The magic state is an assumption (`T|+⟩`), because the IR has no preparation op, and
+  `PrepMagic` is unsupported.
+- `PREPROCESS_PASSES` mirrors the compiler's pass order. A test guards against drift,
+  but hook H1 is still requested.
+- Estimator models are first order:
+  - per-product surface routing is pessimistic for compact layouts;
+  - merged-code distances use `d_joint` as a bound;
+  - constructed adapters handle two blocks with one X or Z logical each;
+  - magic-state storage is free;
+  - routing overhead covers code blocks only.
+- Several spec defaults were made required arguments because no source exists:
+  hardware times and rates, the adapter cycle-time factor, qLDPC in-block costs, and
+  auxiliary-graph sizes. The adapter join default is the sourced 2d − 1, not the
+  spec's 3d.
+- The QFT-4 example from the spec does not exist in the repo and is not exact in
+  Clifford+T. QFT-2 and approximate QFT-n are used instead.

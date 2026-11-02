@@ -187,11 +187,11 @@ function _construct_adapter(blocks, parts)
             # logical i's X representative (paired with logz_ops[i]), as a Z-type operator
             # of the Hadamard-conjugated code (X and Z checks swapped)
             p = getfield(ECC, :logx_ops)(code)[idx]
-            push!(supports, [j for j in 1:nqubits(p) if p[j][1]])
+            push!(supports, [j for j in 1:(nqubits(p)::Int) if p[j][1]])
             code = ECC.CSS(Matrix{Bool}(ECC.parity_matrix_z(code)), Matrix{Bool}(ECC.parity_matrix_x(code)))
         else
             p = getfield(ECC, :logz_ops)(code)[idx]
-            push!(supports, [j for j in 1:nqubits(p) if p[j][2]])
+            push!(supports, [j for j in 1:(nqubits(p)::Int) if p[j][2]])
         end
         push!(codes, code)
     end
