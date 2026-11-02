@@ -26,6 +26,10 @@ include("layout.jl")
 include("adapter_cost.jl")
 include("classify.jl")
 include("hardware.jl")
+include("scheduler.jl")
+include("magic.jl")
+include("estimate.jl")
+include("report.jl")
 
 export HardwareModel, PLModel, AnalyticPL, FitPL, BBFitPL, TablePL,
        CodeModel, SurfaceCodeModel, BBCodeModel, GenericCSSModel,
@@ -35,6 +39,10 @@ export HardwareModel, PLModel, AnalyticPL, FitPL, BBFitPL, TablePL,
        LogicalLayout, validate_layout, pack_sequential, pack_by_interaction, interaction_graph,
        AdapterCostModel, AnalyticAdapterModel, AdapterCost, adapter_cost,
        EstOp, classify_operations, weight_histogram,
-       heavy_hex, tanner_graph, EmbeddingResult, embed_tanner_graph, EmbeddingOverhead, embedding_overhead
+       heavy_hex, tanner_graph, EmbeddingResult, embed_tanner_graph, EmbeddingOverhead, embedding_overhead,
+       ScheduleResult, dependency_dag, schedule_operations,
+       FactoryModel, FifteenToOneFactory, TableFactory, litinski_factory, FactorySpec, factory_spec,
+       magic_state_counts, choose_factory_count,
+       ResourceEstimate, estimate_resources, to_dict
 
 end # module ResourceEstimation

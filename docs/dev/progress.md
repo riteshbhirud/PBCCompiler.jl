@@ -405,3 +405,59 @@ Work is on the local `dev` branch, created from `riteshbhirud/PBCCompiler.jl`
   - the gross code (degree 6) is necessarily non-native on heavy-hex.
 - Full suite: 2319 + E3/E4 + E6 tests pass. `Graphs` was added to
   `test/Project.toml`.
+
+## E7: Scheduler
+
+- `scheduler.jl`:
+  - `dependency_dag`: quantum edges between anticommuting Paulis; classical edges
+    with `t_reaction` when an op reads a bit whose latest write is an earlier op.
+    Pauli-frame updates are free and create no edge.
+  - `schedule_operations`: deterministic list scheduling by bottom level (ties in
+    program order), per-block slots (`max_parallel_surgeries`), cross-block ops
+    occupying every block they touch, and magic states ready at
+    `ceil(j/F)·time_per_state` (unlimited storage).
+  - Reports makespan, logical depth, the longest weighted dependency chain (critical
+    path and its time), per-block utilization, peak concurrent ancilla, and magic
+    waiting time.
+- A bug was fixed during smoke testing: `argmax(f, ready)` returns the element, not
+  its index.
+
+## E8: Magic-state factories
+
+- `magic.jl`:
+  - `FifteenToOneFactory` (GoSC parametric: 11 tiles × 2d², 11d cycles / (1−p)¹⁵ per
+    state, 35p³ output);
+  - `TableFactory` with `litinski_factory` presets from Litinski's MSD paper, Table 1
+    (7-3-3, 9-3-3, 11-5-5 at p = 10⁻⁴; 17-7-7 at p = 10⁻³; a note is recorded when the
+    hardware p differs);
+  - `magic_state_counts` uses the shared `GadgetShapes.count_gadgets`;
+  - `choose_factory_count` searches the factory count by makespan or space-time.
+
+## E9: Error budget and distance selection
+
+- `estimate.jl`: `estimate_resources` and `ResourceEstimate`. The failure probability
+  sums three parts:
+  - each block's p_L per cycle × the cycles it is alive;
+  - each op's p_L × rounds, over every block it touches;
+  - magic states × the factory output error.
+- `optimize_distances` bumps the code family contributing the most failure (all
+  surface blocks share d; BB moves gross → two-gross), re-running everything,
+  until the budget is met or nothing can increase (reported in `notes`).
+- `report.jl`: a readable `show` and `to_dict`.
+- Deviation: `hardware` is a required keyword (no sourced default exists). The
+  spec's default `AnalyticAdapterModel()` is replaced by `adapter_model = nothing`,
+  which is required only when a measurement spans several blocks.
+- Tests (57 assertions, hand-computed):
+  - parallel vs serial scheduling, capacity, the t_reaction critical path,
+    determinism, peak ancilla;
+  - factory formulas and presets;
+  - factory search monotonicity;
+  - **an exact full estimate**: 73 qubits, 5.49 µs, failure 0.027 = blocks 0.018 +
+    measurements 0.009;
+  - invariants (total = Σ breakdown; qubits nondecreasing and failure decreasing in d;
+    a makespan that never drops when a measurement is added; zero routing on
+    all-to-all);
+  - optimization finds the smallest meeting distance;
+  - an unreachable budget is reported;
+  - table p_L.
+- Full suite: all pass (see the commit).

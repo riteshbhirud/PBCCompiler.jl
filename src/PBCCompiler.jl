@@ -16,7 +16,8 @@ include("verification/Verification.jl")
 using .Verification: check_wellformed, verify_compilation, verify_passes, VerificationResult, VerificationStatus,
     EQUIVALENT, NOT_EQUIVALENT, UNKNOWN
 include("resource_estimation/ResourceEstimation.jl")
-export Verification, ResourceEstimation, check_wellformed, verify_compilation, verify_passes, VerificationResult, VerificationStatus,
+using .ResourceEstimation: estimate_resources, LogicalLayout, HardwareModel
+export Verification, ResourceEstimation, check_wellformed, estimate_resources, LogicalLayout, HardwareModel, verify_compilation, verify_passes, VerificationResult, VerificationStatus,
     EQUIVALENT, NOT_EQUIVALENT, UNKNOWN
 
 end # module PBCCompiler
