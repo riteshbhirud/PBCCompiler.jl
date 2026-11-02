@@ -510,3 +510,15 @@ Work is on the local `dev` branch, created from `riteshbhirud/PBCCompiler.jl`
   - the inter-code `build_adapter` rejects unequal-length logical supports (the
     paper's Sec. VII.C allows them);
   - the two-gross merge reaches Z-check weight 12 with non-minimal representatives.
+
+## E11: Estimator docs
+
+- `docs/src/resource_estimation.md` covers the model of computation (a table of how
+  each op type is costed), every cost formula with its parameters and sources, layout
+  building, plugging in threshold data (TablePL CSV format), how to read the report,
+  limitations, and the API autodocs.
+- `docs/make.jl` gained the page and the `ResourceEstimation` module.
+- **The docs build** (HTML rendered; the exported API renders). The examples on both
+  pages were extracted and run: the estimator example produces an estimate (1479
+  qubits at d = 7, failure 0.24%), and the verifier example returns
+  `EQUIVALENT`/`:normal_form` with 6 per-pass results.
