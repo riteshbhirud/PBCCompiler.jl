@@ -15,7 +15,8 @@ include("gadget_shapes.jl")
 include("verification/Verification.jl")
 using .Verification: check_wellformed, verify_compilation, verify_passes, VerificationResult, VerificationStatus,
     EQUIVALENT, NOT_EQUIVALENT, UNKNOWN
-export Verification, check_wellformed, verify_compilation, verify_passes, VerificationResult, VerificationStatus,
+include("resource_estimation/ResourceEstimation.jl")
+export Verification, ResourceEstimation, check_wellformed, verify_compilation, verify_passes, VerificationResult, VerificationStatus,
     EQUIVALENT, NOT_EQUIVALENT, UNKNOWN
 
 end # module PBCCompiler

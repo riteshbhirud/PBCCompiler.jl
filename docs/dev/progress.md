@@ -315,3 +315,64 @@ Work is on the local `dev` branch, created from `riteshbhirud/PBCCompiler.jl`
   the HTML). The "docstrings not included" warning lists internal helpers and
   pre-existing compiler types that were already missing; `warnonly = :missing_docs`
   is unchanged.
+
+## E1: Layout
+
+- `layout.jl`: `LogicalLayout`, `validate_layout` (unmapped qubit, unknown block,
+  index outside `1:k`, shared slot), `pack_sequential`, `interaction_graph` (pairwise
+  weights from the compiled program's measurement supports), and
+  `pack_by_interaction` (greedy placement by affinity, then best-improvement
+  move/swap refinement in the Kernighan–Lin style). The latter reports the remaining
+  cross-block weight.
+- Tests: each validation rule violated once. On a two-pair interaction graph with
+  capacity-2 blocks, interaction packing leaves exactly the single unavoidable
+  cross-block measurement.
+
+## E2: Code models
+
+- Every default is tied to a primary source, each downloaded and checked during this
+  milestone:
+  - [GoSC] Litinski 2019: `p_L = 0.1(100p)^((d+1)/2)` (Eq. 10), d cycles per lattice
+    surgery, tiles of 2d² qubits;
+  - [Fowler] 2012: the 8-step surface-code cycle, giving `3·t_1q + 4·t_2q + t_meas`;
+  - [BB] Bravyi et al. 2024: gross [[144,12,12]] and two-gross [[288,12,18]], their
+    polynomials, 2n physical qubits, the 7-CNOT-layer cycle, and the p_L fit with the
+    Table 6 coefficients.
+- Constants with no source are required arguments:
+  - all hardware times and rates;
+  - BB/generic in-block measurement costs;
+  - auxiliary-graph sizes;
+  - generic cycle layers.
+- The one modelling assumption with a default (one surface-code routing tile per
+  logical qubit in a product) is labelled as an assumption in its docstring.
+- `SurfaceCodeModel`, `BBCodeModel`, `GenericCSSModel` (wraps a QuantumClifford
+  code), plus the p_L models `AnalyticPL`, `FitPL`, `BBFitPL`, and `TablePL` (CSV
+  `code,d,p,p_L,ci_low,ci_high`, log-log interpolation, errors outside the table).
+- `parity_check_matrices` builds the explicit rotated-surface and BB check matrices.
+- Deviation: the spec's `n`, `k`, `d` are named `code_n`, `code_k`, `code_d`.
+- Tests (46 assertions with E1):
+  - **k computed from the GF(2) ranks of the constructed check matrices equals the
+    preset k** for gross, two-gross and surface d = 3, 9; all checks commute;
+  - **the BB fit reproduces Table 1 of Bravyi et al.** (gross: 2×10⁻⁷ at p = 10⁻³ and
+    8×10⁻¹³ at 10⁻⁴; two-gross: 2×10⁻¹² at 10⁻³);
+  - GenericCSS reads Steane7 as [[7,1,3]].
+- Full suite: 2319/2319 pass. That run took 28 min, mostly CairoMakie
+  re-precompiling after adding `Graphs` to `[deps]`.
+
+## E3, E4: Classification, intra-block cost, analytic adapter model
+
+- `classify.jl`: `classify_operations` turns each compiled op into an `EstOp`.
+  - Measurements are classified by the data blocks they touch: 0 → `:magic`,
+    1 → `:intra`, ≥ 2 → `:cross`; gadget joint measurements consume a magic state.
+  - π/4 rotations and `PauliConditional`s are costed as one PPM via a |Y⟩ resource
+    ([GoSC] Sec. 1).
+  - π/2 rotations and Paulis are Pauli-frame updates at no cost.
+  - `weight_histogram` gives the per-block weight distribution.
+- `adapter_cost.jl`: `AnalyticAdapterModel` with `d_joint = min d`,
+  `ancilla = Σ aux + (a−1)·join(d_joint)`, `rounds(d_joint)`, and
+  `cycle_time_factor · max cycle`.
+  - Deviation from the spec: the join default is **2d − 1**, sourced from
+    arXiv:2410.03628 Table III (w = 14 gives 27 qubits), instead of the spec's 3d.
+  - `cycle_time_factor` is **required** (no published value).
+- Tests (17 assertions): hand-computed ancilla, rounds and round times for cross,
+  intra, three-block, gadget and BB cases, plus overridden defaults.
