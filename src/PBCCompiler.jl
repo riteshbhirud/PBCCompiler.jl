@@ -11,4 +11,8 @@ include("random_circuit.jl")
 include("joint_measurement_check.jl")
 include("logic.jl")
 
+include("verification/Verification.jl")
+using .Verification: check_wellformed
+export Verification, check_wellformed
+
 end # module PBCCompiler
