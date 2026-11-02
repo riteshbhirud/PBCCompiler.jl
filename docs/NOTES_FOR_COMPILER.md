@@ -50,6 +50,10 @@ Fix: build the joint Pauli over `vcat(cq, tq)` (unsorted) and let `embed` order 
 c = Circuit([ExpEighPiPauli(P"XZ",[2,1]), Measurement(P"Z",1,[1]), Measurement(P"Z",2,[2])])
 preprocess_circuit(c)   # gadget measures X on q1 and Z on q2 (should be Z on q1, X on q2)
 ```
+It only bites when the T gate is not moved past an earlier Clifford: moving it
+(`conjugate_noncliff`) re-embeds the Pauli correctly through `complete_paulis`. The
+verifier confirms that `[ExpQuatPiPauli(X,[3]), ExpEighPiPauli(XZ,[2,1]), …]` compiles
+correctly, while the same circuit with the T first does not.
 Fix: use `op.qubits` instead of `affectedqubits(op)`.
 
 ### B3. Gadget bit indices can collide with the program's own bits

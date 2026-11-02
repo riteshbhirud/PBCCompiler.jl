@@ -189,3 +189,91 @@ Work is on the local `dev` branch, created from `riteshbhirud/PBCCompiler.jl`
     were inequivalent, more than 10 proved equivalent);
   - B1, B2, B3 and B4 are never certified.
 - Full suite: 1637/1637 pass.
+
+## V6: Dense and stabilizer oracles
+
+- `oracle_dense.jl`: `dense_oracle` builds the input's visible POVM and the compiled
+  program's raw POVM (all outcomes, gadget ones included) by exact enumeration of
+  every branch, with magic qubits prepared in `T|+⟩`.
+  - `:identity` and explicit maps are checked directly.
+  - **`:infer` searches every affine outcome map exactly** via Walsh–Hadamard
+    transforms (`V_T = ±W_{S(T)}` for all T), trying the identity map first and then
+    backtracking with a node budget. An exhausted budget is reported as undecided,
+    never as a refutation.
+  - `:channel` additionally compares per-record Choi matrices via Kraus Gram sums.
+  - It uses a tolerance of 1e-9, so it refutes and never certifies.
+- `oracle_stabilizer.jl`: `stabilizer_oracle` (refutation only) uses QuantumClifford's
+  `GeneralizedStabilizer`. It draws random stabilizer inputs, samples a record from
+  the input, and computes the record's exact probability under both programs, with
+  hidden branches enumerated.
+- `oracle_dispatch.jl`: `:auto` tries the normal form first, then the dense oracle if
+  the instance is small enough, otherwise the stabilizer oracle. A numerical
+  agreement is reported as `UNKNOWN`. Under `:infer`, a stabilizer difference found
+  with the identity map is reported as evidence (`UNKNOWN`), because it does not rule
+  out a parity map.
+- The one-argument `verify_compilation(input)` now defaults to
+  `outcome_map = :identity`, which is PBCCompiler's runtime contract.
+- **Upstream QuantumClifford 0.11.8 bug found:** `apply!(::GeneralizedStabilizer,
+  ::PauliChannel)` evaluates `im^(phaseₗ − phaseᵣ + 4)`, which throws `DomainError` when
+  a channel Pauli has a −1 sign. Worked around by passing unsigned Paulis. Worth
+  reporting upstream.
+- Performance fixes made during this milestone:
+  - Forced projection as a non-unitary Pauli channel grew χ 4× per measurement (a
+    test took more than 10 minutes). It now uses QuantumClifford's own tableau-updating
+    measurement routine (internal `_projectrand_notnorm`, wrapped in one place).
+  - The `:infer` map search hung on one case (8 visible bits, 10 raw bits) because it
+    enumerated candidate combinations before trying the identity map. It now tries
+    the identity first and backtracks with pruning.
+- Tests (`test_oracles.jl`):
+  - **300 seeded random cases: the normal form never contradicts the dense oracle**
+    (≥ 200 decided, ≥ 50 proved equivalent, ≥ 30 refuted);
+  - the dense oracle finds parity maps that the normal form cannot;
+  - the channel-semantics refutation works;
+  - the stabilizer oracle never refutes a correct compilation (40 programs), and
+    catches ≥ 80% of dense-confirmed channel-changing mutants;
+  - B1 on 12 qubits (beyond the dense limit) is refuted by the stabilizer oracle.
+- **Long run** (`benchmark/verification/long_crosscheck.jl 3000 1`):
+  3000 cases, 1434 proved `EQUIVALENT` by the normal form, 853 refuted by the dense
+  oracle, **0 contradictions**, 188 s.
+
+## V7: Counterexamples and minimization
+
+- `counterexample.jl`:
+  - `minimize_counterexample` delta-debugs the *input* and recompiles each candidate
+    through `preprocess_circuit` (the compiler is deterministic; checked in M0);
+  - `minimize_pair` delta-debugs the visible bits of a given (input, compiled) pair;
+  - every counterexample is re-confirmed by the dense oracle when small enough and
+    marked confirmed or unconfirmed.
+- A `Counterexample` reports:
+  - the first diverging canonical items;
+  - a dense input state, or a stabilizer state from the stabilizer oracle;
+  - the visible record and its probability under each program;
+  - the minimized programs.
+- Tests (`test_counterexample.jl`, 121 assertions):
+  - B1 buried in random 4-qubit circuits (5 cases) is minimized to a few ops
+    containing the reversed CNOT, confirmed, and independently re-checked;
+  - B2 is minimized to the T gate plus measurements;
+  - 30 mutated compiled outputs give confirmed, pair-minimized counterexamples;
+  - beyond the dense limit the witness is a stabilizer state.
+- Finding: **B2 only bites when the unsorted T is not moved past an earlier
+  Clifford**, because moving it re-embeds the Pauli correctly. The verifier correctly
+  certified such a circuit, so my test expectation was wrong. The notes now say
+  exactly when B2 occurs.
+
+## V8: Per-pass translation validation
+
+- `passwise.jl`: `PREPROCESS_PASSES` mirrors `preprocess_circuit`'s pass order (hook
+  request H1 in `docs/NOTES_FOR_COMPILER.md`), plus `run_passes`, `verify_passes` and
+  `verify_passes_detailed`. Each pass's output is verified against its input, with the
+  original input's bits as the visible record.
+- To support intermediate programs, `verify_compilation` gained `visible_bits`. It also
+  lifts gadgets on the input side, and both oracles now prepare magic qubits in either
+  program.
+- Results:
+  - **B1 is localized to `remove_pauliconditional`, B2 to `remove_nonclifford`**;
+  - the fixture and the compiler's own test circuits are `EQUIVALENT` at every pass.
+- Drift guard: running `PREPROCESS_PASSES` in sequence equals `preprocess_circuit` on
+  30 random programs, and the early return for programs with fewer than two ops is
+  mirrored.
+- Full suite at this point: 2273/2273 pass. That includes the V9 test files written
+  so far; those are committed with V9.

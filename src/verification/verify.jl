@@ -6,7 +6,9 @@
 
 Check that `compiled` implements the same logical operation as `input`. The
 one-argument form compiles `input` with PBCCompiler's `preprocess_circuit` first
-(on a copy).
+(on a copy). It defaults to `outcome_map = :identity`, because PBCCompiler's
+runtime reads raw bits: the compiler's contract is that every input bit keeps its
+index.
 
 Method layers, in order:
 
@@ -36,14 +38,21 @@ Keyword arguments:
 - `oracle = :auto`, `max_dense_qubits = 10`, `max_branches = 4096`,
   `rng = Random.default_rng()`: oracle control.
 - `magic_k = 1`: magic qubits are prepared in `(|0⟩ + ζ₈^magic_k|1⟩)/√2` (1 means `T|+⟩`).
-- `n_data`: number of data qubits (default: the input's width). Compiled qubits
-  above it are magic qubits.
+- `n_data`: number of data qubits (default: the input's width). Qubits above it
+  are magic qubits, in either program.
+- `visible_bits`: the input bits that form the outcome record (default: every bit
+  the input writes).
+- `minimize = true`: when a counterexample is found, shrink it
+  ([`minimize_counterexample`](@ref) for the one-argument form, which can recompile;
+  [`minimize_pair`](@ref) otherwise), then re-confirm it with the dense oracle when
+  it is small enough.
 """
 function verify_compilation(input::AbstractVector{CircuitOp.Type}, compiled::AbstractVector{CircuitOp.Type};
                             outcome_map = :infer, oracle::Symbol = :auto, max_dense_qubits::Int = 10,
                             max_branches::Int = 4096, rng::AbstractRNG = Random.default_rng(),
                             semantics::Symbol = :outcomes, magic_k::Int = 1, n_data::Union{Nothing,Int} = nothing,
-                            stabilizer_trials::Int = 20)
+                            stabilizer_trials::Int = 20, minimize::Bool = true,
+                            visible_bits::Union{Nothing,AbstractVector{Int}} = nothing, _compiled_by_us::Bool = false)
     semantics in (:outcomes, :channel) || throw(ArgumentError("semantics must be :outcomes or :channel"))
     oracle in (:auto, :dense, :stabilizer, :none) || throw(ArgumentError("oracle must be :auto, :dense, :stabilizer or :none"))
     t0 = time_ns()
@@ -55,11 +64,16 @@ function verify_compilation(input::AbstractVector{CircuitOp.Type}, compiled::Abs
     stats[:input_ops] = length(input)
     stats[:compiled_ops] = length(compiled)
 
-    wf = vcat(["input: " * s for s in check_wellformed(input; nqubits = n)],
+    wf = vcat(["input: " * s for s in check_wellformed(input; n_data = n)],
               ["compiled: " * s for s in check_wellformed(compiled; n_data = n)])
 
-    # lowering and gadget lifting
-    prog_in = lower(input, n)
+    # lowering and gadget lifting (the input side may contain gadgets too, e.g. an
+    # intermediate program in per-pass validation)
+    lr_in = lift_gadgets(input, n; magic_k)
+    prog_in = lower_lifted(input, lr_in)
+    for f in lr_in.failed
+        push!(reasons, "input gadget at ops $(f.match.ops) not proved: $(f.reason)")
+    end
     t1 = time_ns()
     lr = lift_gadgets(compiled, n; magic_k)
     prog_out = lower_lifted(compiled, lr)
@@ -86,7 +100,7 @@ function verify_compilation(input::AbstractVector{CircuitOp.Type}, compiled::Abs
         t2 = time_ns()
         cf_in = canonicalize(normal_form(prog_in); semantics)
         cf_out = canonicalize(normal_form(prog_out); semantics)
-        cmp = compare_forms(cf_in, cf_out; outcome_map)
+        cmp = compare_forms(cf_in, cf_out; outcome_map, visible_bits)
         stats[:time_normal_form] = (time_ns() - t2) / 1e9
         stats[:items_input] = length(cf_in.nf.items)
         stats[:items_compiled] = length(cf_out.nf.items)
@@ -114,21 +128,25 @@ function verify_compilation(input::AbstractVector{CircuitOp.Type}, compiled::Abs
     end
 
     res = _oracle_fallback(input, compiled, n; oracle, max_dense_qubits, max_branches, rng, semantics,
-                           magic_k, outcome_map, stabilizer_trials, divergence, stats, reasons)
+                           magic_k, outcome_map, stabilizer_trials, divergence, stats, reasons, visible_bits)
+    status, method, cex = res
+    if status == NOT_EQUIVALENT
+        cex = _finish_counterexample(cex, input, compiled, n; compiled_by_us = _compiled_by_us, minimize,
+                                     outcome_map, semantics, magic_k, max_dense_qubits, rng, stats)
+    end
     stats[:time_total] = (time_ns() - t0) / 1e9
     stats[:reasons] = reasons
-    status, method, cex = res
     VerificationResult(status, method, nothing, cex, unverified, wf, stats)
 end
 
-function verify_compilation(input::AbstractVector{CircuitOp.Type}; kwargs...)
+function verify_compilation(input::AbstractVector{CircuitOp.Type}; outcome_map = :identity, kwargs...)
     compiled = try
         _compile(input)
     catch err
         stats = Dict{Symbol,Any}(:reasons => ["the compiler threw an error: " * sprint(showerror, err)])
         return VerificationResult(UNKNOWN, :none, nothing, nothing, Int[], String[], stats)
     end
-    verify_compilation(input, compiled; kwargs...)
+    verify_compilation(input, compiled; outcome_map, _compiled_by_us = true, kwargs...)
 end
 
 # The compiler under test, through its public entry point.

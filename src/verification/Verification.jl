@@ -34,7 +34,11 @@ include("gadgets.jl")
 include("canonical.jl")
 include("compare.jl")
 include("types.jl")
+include("oracle_dense.jl")
+include("oracle_stabilizer.jl")
 include("oracle_dispatch.jl")
+include("counterexample.jl")
+include("passwise.jl")
 include("verify.jl")
 
 export AffineBit, affine_var, isconstant, evaluate, substitute,
@@ -47,6 +51,9 @@ export AffineBit, affine_var, isconstant, evaluate, substitute,
        LiftingResult, lift_gadgets, lower_lifted,
        CanonicalForm, canonicalize, ComparisonResult, compare_forms,
        VerificationStatus, EQUIVALENT, NOT_EQUIVALENT, UNKNOWN,
-       Certificate, Counterexample, VerificationResult, verify_compilation
+       Certificate, Counterexample, VerificationResult, verify_compilation,
+       DenseVerdict, dense_oracle, StabilizerVerdict, stabilizer_oracle,
+       minimize_counterexample, minimize_pair,
+       PREPROCESS_PASSES, PassStep, run_passes, verify_passes, verify_passes_detailed
 
 end # module Verification

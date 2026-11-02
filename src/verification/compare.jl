@@ -41,9 +41,13 @@ equivalent programs, inferring or checking the outcome map.
   variables of the `AffineBit` are compiled bit indices, read at their final
   write). This map is checked.
 
+`visible_bits` restricts the outcome record to those input bits (default: every bit
+the input writes). Other input outcomes are hidden.
+
 Sound but incomplete: a mismatch means "not proved equal", never "proved different".
 """
-function compare_forms(a::CanonicalForm, b::CanonicalForm; outcome_map = :infer)
+function compare_forms(a::CanonicalForm, b::CanonicalForm; outcome_map = :infer,
+                       visible_bits::Union{Nothing,AbstractVector{Int}} = nothing)
     a.semantics == b.semantics || throw(ArgumentError("forms use different semantics"))
     A = a.nf.items; B = b.nf.items
     vmap = Dict{Int,AffineBit}()
@@ -67,7 +71,9 @@ function compare_forms(a::CanonicalForm, b::CanonicalForm; outcome_map = :infer)
     length(A) == length(B) || return _mismatch("different numbers of items ($(length(A)) vs $(length(B)))",
                                                  min(length(A), length(B)) + 1)
     omap = Dict{Int,AffineBit}()
-    for (bit, v) in a.nf.final_var
+    for bit in (visible_bits === nothing ? keys(a.nf.final_var) : visible_bits)
+        haskey(a.nf.final_var, bit) || return _mismatch("visible bit $bit is never written by the input", 0)
+        v = a.nf.final_var[bit]
         haskey(vmap, v) || return _mismatch("input bit $bit is not produced by a matched measurement", 0)
         omap[bit] = vmap[v]
     end
