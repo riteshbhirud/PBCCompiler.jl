@@ -300,3 +300,18 @@ Work is on the local `dev` branch, created from `riteshbhirud/PBCCompiler.jl`
   24 benchmark programs verify `EQUIVALENT`, the largest (the 121-T fixture) in about
   30 ms. Added a `"verification"` group to `benchmark/benchmarks.jl`.
 - Write-up: `docs/dev/verification_eval.md`.
+
+## V10: Verification docs
+
+- `docs/src/verification.md`: the semantics checked (`:outcomes` vs `:channel`, the
+  outcome maps, hidden outcomes), a table of method layers with
+  soundness/completeness, exactly which equivalences the normal form cannot decide,
+  how to read results, certificates and counterexamples (with the B1 example),
+  precise limitations, and API autodocs for `Verification` and `GadgetShapes`.
+- `docs/make.jl`: added the page and the two submodules (a docs-config edit, outside
+  the spec's list of allowed edits but not compiler behaviour).
+- **The page builds:** `julia --project=docs docs/make.jl` renders HTML, and
+  deployment is skipped locally as expected. The exported API renders (checked in
+  the HTML). The "docstrings not included" warning lists internal helpers and
+  pre-existing compiler types that were already missing; `warnonly = :missing_docs`
+  is unchanged.

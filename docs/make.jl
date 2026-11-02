@@ -11,10 +11,11 @@ makedocs(
     warnonly = :missing_docs,
     sitename = "PBCCompiler.jl",
     format = Documenter.HTML(),
-    modules = [PBCCompiler],
+    modules = [PBCCompiler, PBCCompiler.Verification, PBCCompiler.GadgetShapes],
     authors = "Stefan Krastanov",
     pages = [
         "PBCCompiler.jl" => "index.md",
+        "Verification" => "verification.md",
         "API" => "API.md",
     ]
 )
