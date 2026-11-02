@@ -14,15 +14,25 @@ module Verification
 using ..PBCCompiler: Circuit, CircuitOp
 using Moshi.Match: @match
 import QuantumClifford
+import LinearAlgebra
+using Random: AbstractRNG, randperm
 using QuantumClifford: PauliOperator, CliffordOperator, nqubits, embed, comm
 
 include("affine.jl")
 include("ops.jl")
 include("wellformed.jl")
 include("frame.jl")
+include("paulimap.jl")
+include("lowering.jl")
+include("normal_form.jl")
+include("dense.jl")
+include("random_circuits.jl")
 
 export AffineBit, affine_var, isconstant, evaluate, substitute,
        check_wellformed, wellformedness_issues, WellformednessIssue,
-       SymbolicPauli, mul_conditional!, mul_frame!, conjugate!, commutation_parity, frame_variables
+       SymbolicPauli, mul_conditional!, mul_frame!, conjugate!, commutation_parity, frame_variables,
+       PauliMap, identity_map, apply_map, rotate!, compose, to_clifford,
+       VOp, LoweredProgram, lower, NFItem, NormalForm, normal_form, frame_clifford,
+       random_clifford_t_circuit
 
 end # module Verification

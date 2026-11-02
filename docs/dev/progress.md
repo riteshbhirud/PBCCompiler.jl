@@ -63,3 +63,41 @@ Work is on the local `dev` branch, created from `riteshbhirud/PBCCompiler.jl`
 - Added `Random` and `LinearAlgebra` to `test/Project.toml`. The `Pkg.test` sandbox
   cannot load undeclared stdlibs.
 - Full suite: 263/263 pass.
+
+## V3: Rotation normal form
+
+- `paulimap.jl`: `PauliMap`, a Clifford frame stored as the 2n generator images
+  (signs included), with `rotate!` (O(n) Pauli products per Clifford rotation),
+  `apply_map`, `compose`, and `to_clifford`. The update rules for `exp(-ikπ/4·Q)`
+  are derived in the file header.
+- `lowering.jl`: `lower` turns a `Circuit` into `VOp`s. Each measurement write gets
+  its own SSA variable, so bit overwrites are sound. `PauliConditional` becomes
+  `(P_c)_{π/4}(P_t)_{π/4}(P_cP_t)_{−π/4}` (derived from `C = (I+P_c+P_t−P_cP_t)/2`).
+  Unsupported constructs (`PrepMagic`, nested conditionals, conditional
+  measurements, reads before writes) are collected rather than guessed at.
+- `normal_form.jl`: `NormalForm` / `NFItem`, the "push Cliffords to the end"
+  builder. Angles are exact `Rational`s in units of π. Unconditional Clifford
+  rotations are absorbed into the frame, with a sign correction folded into the
+  Pauli frame. Paulis (including conditional ones) go into the symbolic Pauli frame.
+  Everything else becomes an item with an affine sign or condition. The constant part
+  of the Pauli frame is folded into the Clifford frame at the end.
+- `dense.jl`: a dense simulator that gives each `CircuitOp` its semantics directly
+  (`PauliConditional` via the projector definition, not via the lowering), so it is
+  an independent cross-check.
+- `random_circuits.jl`: the seeded `random_clifford_t_circuit` generator (qubits,
+  depth, T density, measurement density, classical-control density, multi-qubit
+  rotations, and an option to avoid compiler bugs B1/B2).
+- Tests (`test_normal_form.jl`, 724 assertions):
+  - `PauliMap` against dense `U P U†` and `U† P U` (40 random sequences, n ≤ 4),
+    against QuantumClifford's own `apply!` (exact phases), and `compose`;
+  - the `PauliConditional` decomposition against the projector definition (25 cases);
+  - **60 random unitary Clifford+T circuits (n ≤ 6)**: the input's dense unitary
+    equals `F · items` up to phase, checked generator by generator against both
+    `fwd` and `inv`;
+  - **60 random circuits with mid-circuit measurements and classical control**: the
+    per-outcome POVM of the normal-form items equals the circuit's POVM.
+- Test power check: flipping the sign of one measurement item is detected in 50 of
+  60 random circuits. The other 10 flip outcomes that are uniformly random for every
+  input, where the flip is semantically a no-op.
+- `LinearAlgebra` was added to `[deps]`, with compat `1.11.0` mirroring `Random`.
+- Full suite: 987/987 pass.
