@@ -72,3 +72,15 @@ SUITE["traversal"]["mixed"]["noop_100"] = @benchmarkable traversal(c, noop_trans
 SUITE["traversal"]["direction"] = BenchmarkGroup(["direction"])
 SUITE["traversal"]["direction"]["right_100"] = @benchmarkable traversal(c, swap_transform, :right) setup=(c=make_pauli_circuit(100)) evals=1
 SUITE["traversal"]["direction"]["left_100"] = @benchmarkable traversal(c, swap_transform, :left) setup=(c=make_pauli_circuit(100)) evals=1
+
+# Verification benchmarks (normal-form path; see benchmark/verification/ for the
+# timing study, mutation report and long cross-check)
+include(joinpath(@__DIR__, "verification", "circuits.jl"))
+using PBCCompiler: preprocess_circuit, parse_input
+SUITE["verification"] = BenchmarkGroup(["verification"])
+let fixture = parse_input(joinpath(@__DIR__, "..", "test", "fixtures", "sample_input.qasm"))
+    for (name, input) in (("fixture_121T", fixture), ("approx_qft_12", approx_qft(12)), ("cuccaro_adder_3", cuccaro_adder(3)))
+        compiled = preprocess_circuit(copy(input))
+        SUITE["verification"][name] = @benchmarkable verify_compilation($input, $compiled; oracle=:none)
+    end
+end

@@ -277,3 +277,26 @@ Work is on the local `dev` branch, created from `riteshbhirud/PBCCompiler.jl`
   mirrored.
 - Full suite at this point: 2273/2273 pass. That includes the V9 test files written
   so far; those are committed with V9.
+
+## V9: Property tests, mutation testing, benchmarks
+
+- `benchmark/verification/circuits.jl`: approximate QFT-n (controlled-S only, exact in
+  Clifford+T), Cuccaro adders (7-T Toffolis), and an exact CNOT-reversal identity so
+  benchmarks avoid bug B1. **Checked against dense matrices**
+  (`test_benchmark_circuits.jl`): CNOT both ways, CS, Toffoli, the adder adds
+  correctly with carries for k = 1, 2, and the QFT-2 matches.
+- Property tests: random Clifford+T circuits verify `EQUIVALENT` (V5), and the normal
+  form never contradicts the dense oracle (V6, plus a 3000-case long run).
+- Mutation testing: `test/verification/mutations.jl` has 7 mutation kinds (flip a
+  condition bit, drop a correction, flip a sign, swap anticommuting measurements,
+  change a letter, change an angle, drop a gadget).
+  - `test_mutation.jl` (in the suite) asserts 100% detection of channel-changing
+    mutants, zero false refutations, and at least 90% detection with the dense oracle
+    disabled.
+  - `mutation_report.jl` (300 programs): **958 channel-changing mutants, 100%
+    detected for every kind, 100% also by the stabilizer oracle alone, 0 false
+    refutations, no misses.**
+- Timing: `timing.jl` writes `results/timing.csv` and `plot_timing.jl` the PNGs. All
+  24 benchmark programs verify `EQUIVALENT`, the largest (the 121-T fixture) in about
+  30 ms. Added a `"verification"` group to `benchmark/benchmarks.jl`.
+- Write-up: `docs/dev/verification_eval.md`.

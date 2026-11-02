@@ -1,0 +1,8 @@
+mutation,applied,changing,detected,by_normal_form,by_dense,by_stabilizer,detected_stab_only,false_refutation,not_certified
+flip_condition_bit,192,98,98,0,98,0,98,0,167
+drop_correction,198,113,113,0,113,0,113,0,165
+flip_sign,283,188,188,0,188,0,188,0,234
+swap_anticommuting,153,92,92,0,92,0,92,0,153
+change_letter,283,246,246,0,246,0,246,0,283
+change_angle,198,106,106,0,106,0,106,0,194
+drop_gadget,199,115,115,0,115,0,115,0,129
