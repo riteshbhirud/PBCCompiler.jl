@@ -25,6 +25,7 @@ include("checks.jl")
 include("layout.jl")
 include("adapter_cost.jl")
 include("classify.jl")
+include("hardware.jl")
 
 export HardwareModel, PLModel, AnalyticPL, FitPL, BBFitPL, TablePL,
        CodeModel, SurfaceCodeModel, BBCodeModel, GenericCSSModel,
@@ -33,6 +34,7 @@ export HardwareModel, PLModel, AnalyticPL, FitPL, BBFitPL, TablePL,
        parity_check_matrices, gf2_rank,
        LogicalLayout, validate_layout, pack_sequential, pack_by_interaction, interaction_graph,
        AdapterCostModel, AnalyticAdapterModel, AdapterCost, adapter_cost,
-       EstOp, classify_operations, weight_histogram
+       EstOp, classify_operations, weight_histogram,
+       heavy_hex, tanner_graph, EmbeddingResult, embed_tanner_graph, EmbeddingOverhead, embedding_overhead
 
 end # module ResourceEstimation

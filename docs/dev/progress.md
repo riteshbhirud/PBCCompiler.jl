@@ -376,3 +376,32 @@ Work is on the local `dev` branch, created from `riteshbhirud/PBCCompiler.jl`
   - `cycle_time_factor` is **required** (no published value).
 - Tests (17 assertions): hand-computed ancilla, rounds and round times for cross,
   intra, three-block, gadget and BB cases, plus overridden defaults.
+
+## E6: Hardware model and embedding overhead
+
+- `hardware.jl`:
+  - generators `ResourceEstimation.grid(rows, cols)` (not exported, because Graphs.jl
+    exports its own `grid`) and `heavy_hex(n)` (brick-wall honeycomb with a qubit on
+    every edge, degree ≤ 3);
+  - `tanner_graph`;
+  - `embed_tanner_graph`: seeded simulated annealing over injective placements,
+    minimizing the total shortest-path edge length. It keeps an internal drift
+    check that the tracked cost equals the recomputed one;
+  - `embedding_overhead`: `:bridge` routing adds L−1 qubits per non-native edge and
+    2(max L−1) CNOT layers per round; `:swap` routing adds 6(max L−1) layers and no
+    qubits. All-to-all hardware has zero overhead.
+- `HardwareModel` lives in `code_models.jl`. All its times and rates are required.
+- A bug was fixed before testing: the swap move's Δ ignored the edge between the two
+  swapped nodes (off by 2·D). Spotted by re-deriving it by hand; the drift check
+  would also have caught it.
+- Tests (14 assertions):
+  - generator structure;
+  - surface d=3 Tanner graph sizes;
+  - all-to-all gives zero overhead;
+  - the same seed gives the same placement;
+  - bookkeeping (cost = Σ lengths, extra qubits = Σ(L−1));
+  - annealing never ends worse than its start;
+  - a path graph embeds natively on a line;
+  - the gross code (degree 6) is necessarily non-native on heavy-hex.
+- Full suite: 2319 + E3/E4 + E6 tests pass. `Graphs` was added to
+  `test/Project.toml`.
