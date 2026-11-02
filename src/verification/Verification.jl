@@ -27,12 +27,16 @@ include("lowering.jl")
 include("normal_form.jl")
 include("dense.jl")
 include("random_circuits.jl")
+include("cyclotomic.jl")
+include("gadgets.jl")
 
 export AffineBit, affine_var, isconstant, evaluate, substitute,
        check_wellformed, wellformedness_issues, WellformednessIssue,
        SymbolicPauli, mul_conditional!, mul_frame!, conjugate!, commutation_parity, frame_variables,
        PauliMap, identity_map, apply_map, rotate!, compose, to_clifford,
        VOp, LoweredProgram, lower, NFItem, NormalForm, normal_form, frame_clifford,
-       random_clifford_t_circuit
+       random_clifford_t_circuit,
+       GadgetProof, prove_reduced_gadget, synthesize_z1_clifford, LiftedGadget, GadgetFailure,
+       LiftingResult, lift_gadgets, lower_lifted
 
 end # module Verification

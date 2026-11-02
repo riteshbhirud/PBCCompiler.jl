@@ -101,3 +101,49 @@ Work is on the local `dev` branch, created from `riteshbhirud/PBCCompiler.jl`
   input, where the flip is semantically a no-op.
 - `LinearAlgebra` was added to `[deps]`, with compat `1.11.0` mirroring `Random`.
 - Full suite: 987/987 pass.
+
+## V4: Gadget recognition and lifting
+
+- `src/gadget_shapes.jl`: the `PBCCompiler.GadgetShapes` module. It does template-driven
+  structural recognition (`GADGET_TEMPLATES`, `find_gadgets`, `count_gadgets`) and
+  depends only on the data types and QuantumClifford, so the resource estimator (E8)
+  can share it without depending on the verifier.
+- `cyclotomic.jl`: exact arithmetic in Q(ζ₈) (`Cyc8`), with field inverse via the
+  Galois norm.
+- `gadgets.jl`:
+  - `synthesize_z1_clifford` builds V with V·P·V† = +Z₁ as an explicit rotation
+    sequence and checks it exactly;
+  - each correction must map to ±Z₁ under V;
+  - `prove_reduced_gadget` proves the 2-qubit reduced gadget **exactly in Q(ζ₈)**
+    over all four branches: diagonal and unitary per branch, trace preserving, angle
+    a multiple of π/8, residual Pauli frame affine in the gadget outcomes;
+  - proofs are cached by (template, reduced shape, magic state);
+  - `lift_gadgets` and `lower_lifted` splice the proved rotation, plus any residual
+    frame, into the lowered program.
+- `lower` gained a `replacements` hook, so gadgets are spliced in during lowering.
+- Results:
+  - **all 111 gadgets of the repo fixture lift**, with angle 1/8, no residual, and
+    every branch probability exactly 1/4;
+  - all gadgets of 40 random compiled circuits lift;
+  - the second time the same shape is seen, the proof is a cache hit.
+- Corrupted gadgets each fail with an explicit reason:
+  - π/4 correction replaced by π/2: rejected;
+  - swapped conditioning bits: rejected;
+  - missing π/4 correction: rejected;
+  - correction about the wrong Pauli: rejected;
+  - magic state |+⟩: rejected;
+  - magic state S|+⟩: not a T;
+  - magic qubit measured in Z: not recognized.
+  - The missing-π/2 and negated-π/4 cases lift with an explicit residual Pauli frame,
+    which is mathematically correct. They are caught at comparison under the identity
+    outcome map.
+- An independent floating-point cross-check of the exact prover over all 144
+  (joint letter, magic letter, sign, magic state) combinations with random
+  corrections agrees on every success and every failure.
+- Correction during the work: I first predicted that the |+⟩ magic state gives
+  non-unitary branches. The prover showed (and a hand recomputation confirmed) that
+  the X measurement makes them unitary, and the rejection reason is "different
+  rotations". The test was fixed to match the mathematics.
+- Aqua flagged constructor ambiguities from `Cyc8 <: Number`. Fixed by dropping the
+  supertype and adding a typed inner constructor. Aqua is clean again.
+- Full suite: 1344/1344 pass.

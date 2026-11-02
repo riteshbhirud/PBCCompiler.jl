@@ -11,6 +11,7 @@ include("random_circuit.jl")
 include("joint_measurement_check.jl")
 include("logic.jl")
 
+include("gadget_shapes.jl")
 include("verification/Verification.jl")
 using .Verification: check_wellformed
 export Verification, check_wellformed

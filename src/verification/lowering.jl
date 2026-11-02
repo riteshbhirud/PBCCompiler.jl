@@ -60,17 +60,35 @@ function _embed_checked(p::PauliT, q::Vector{Int}, n::Int, what::String)
 end
 
 """
-    lower(c, n::Int) -> LoweredProgram
+    lower(c, n::Int; replacements = Dict()) -> LoweredProgram
 
 Lower the circuit `c` to rotations and measurements on qubits `1:n`. Unsupported
 constructs are recorded in `unsupported`: `PrepMagic` (no defined semantics),
 nested `BitConditional`, conditional measurements, reads before writes, and
-malformed ops.
+malformed ops (including ops on qubits outside `1:n`).
+
+`replacements[i] = (j, vops, writes)` replaces ops `i:j` by the given `vops`, and
+records each `(bit, var)` in `writes` as a write of `bit` with variable `var`. This is
+how proved gadgets are spliced in.
 """
-function lower(c::AbstractVector{CircuitOp.Type}, n::Int)
+function lower(c::AbstractVector{CircuitOp.Type}, n::Int;
+               replacements::Dict{Int,Tuple{Int,Vector{VOp},Vector{Tuple{Int,Int}}}} =
+                   Dict{Int,Tuple{Int,Vector{VOp},Vector{Tuple{Int,Int}}}}())
     prog = LoweredProgram(n, VOp[], Dict{Int,Int}(), Dict{Int,Int}(), Tuple{Int,String}[])
-    for (i, op) in enumerate(c)
-        _lower_op!(prog, op, i, AffineBit(true))
+    i = 1
+    while i <= length(c)
+        if haskey(replacements, i)
+            j, vops, writes = replacements[i]
+            append!(prog.ops, vops)
+            for (b, v) in writes
+                prog.final_var[b] = v
+                prog.var_bit[v] = b
+            end
+            i = j + 1
+        else
+            _lower_op!(prog, c[i], i, AffineBit(true))
+            i += 1
+        end
     end
     prog
 end
