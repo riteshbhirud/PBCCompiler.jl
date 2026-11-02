@@ -198,7 +198,8 @@ function _estimate(c, layout::LogicalLayout; hardware, adapter_model, factory, e
         j = pos[k]
         push!(per_meas, (index = o.index, kind = o.kind, class = o.class, blocks = o.blocks, weights = o.weights,
                          ancilla = o.ancilla, rounds = o.rounds, seconds = duration(o), start = sch.start[j],
-                         failure = f, consumes_magic = o.consumes_magic, cost_source = o.cost_source))
+                         failure = f, consumes_magic = o.consumes_magic, cost_source = o.cost_source,
+                         analytic_ancilla = o.alt_ancilla))
     end
     nmagic = count(o -> o.consumes_magic, ops)
     fmag = nmagic * spec.output_error

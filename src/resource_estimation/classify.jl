@@ -27,7 +27,8 @@ One operation of the compiled program with its classification and cost:
 - `blocks` and `weights`: the data blocks touched and the logical weight on each;
 - `consumes_magic`;
 - classical `reads` and `writes` (bit indices; `writes = 0` if none);
-- `ancilla`, `rounds`, `round_time` (seconds), `d_joint`, `cost_source`, `note`.
+- `ancilla`, `rounds`, `round_time` (seconds), `d_joint`, `cost_source`, `note`, and
+`alt_ancilla` (the analytic model's count when the constructed model was used, else −1).
 """
 mutable struct EstOp
     index::Int
@@ -45,6 +46,7 @@ mutable struct EstOp
     d_joint::Int
     cost_source::Symbol
     note::String
+    alt_ancilla::Int
 end
 
 duration(op::EstOp) = op.rounds * op.round_time
@@ -105,7 +107,7 @@ function classify_operations(c::AbstractVector{CircuitOp.Type}, layout::LogicalL
         end
         if p === nothing
             push!(ops, EstOp(i, kind, :free, zero(PauliOperator, N), Int[], Int[], false, reads, writes, 0, 0, 0.0, 0,
-                             :none, "not costed"))
+                             :none, "not costed", -1))
             continue
         end
         P = embed(N, q, p)
@@ -114,23 +116,23 @@ function classify_operations(c::AbstractVector{CircuitOp.Type}, layout::LogicalL
         bs, ws = _blocks_and_weights(support, n_data, layout)
         consumes = (kind == :measurement && magic && !isempty(bs)) || kind == :t_rotation
         if kind == :frame
-            push!(ops, EstOp(i, kind, :free, P, bs, ws, false, reads, writes, 0, 0, 0.0, 0, :none, "Pauli frame"))
+            push!(ops, EstOp(i, kind, :free, P, bs, ws, false, reads, writes, 0, 0, 0.0, 0, :none, "Pauli frame", -1))
         elseif isempty(bs)
             # magic-only: a single-qubit measurement of an injected magic patch, one code cycle
-            push!(ops, EstOp(i, kind, :magic, P, bs, ws, false, reads, writes, 0, 1, ref_cycle, 0, :magic, ""))
+            push!(ops, EstOp(i, kind, :magic, P, bs, ws, false, reads, writes, 0, 1, ref_cycle, 0, :magic, "", -1))
         elseif length(bs) == 1
             model = layout.code_blocks[bs[1]]
             anc, rounds = intra_measurement_cost(model, ws[1])
             push!(ops, EstOp(i, kind, :intra, P, bs, ws, consumes, reads, writes, anc, rounds, cycle_time(model, hw),
-                             code_d(model), :intra, ""))
+                             code_d(model), :intra, "", -1))
         else
             adapter_model === nothing &&
                 throw(ArgumentError("op $i spans blocks $bs: cross-block measurements need an adapter_model " *
                                     "(e.g. AnalyticAdapterModel(cycle_time_factor = ...))"))
-            ac = adapter_cost(adapter_model, layout.code_blocks[bs], ws, hw; layout, qubits = support,
+            ac = adapter_cost(adapter_model, layout.code_blocks[bs], ws, hw; layout, qubits = support, pauli = P,
                               n_data, adapter_kwargs...)
             push!(ops, EstOp(i, kind, :cross, P, bs, ws, consumes, reads, writes, ac.ancilla, ac.rounds, ac.round_time,
-                             ac.d_joint, ac.source, ac.note))
+                             ac.d_joint, ac.source, ac.note, ac.alt_ancilla))
         end
     end
     ops

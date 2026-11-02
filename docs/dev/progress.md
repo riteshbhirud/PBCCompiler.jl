@@ -461,3 +461,52 @@ Work is on the local `dev` branch, created from `riteshbhirud/PBCCompiler.jl`
   - an unreachable budget is reported;
   - table p_L.
 - Full suite: all pass (see the commit).
+
+## E5: Constructed adapter model
+
+- Asked first, as the spec requires. The user confirmed the fork is
+  `riteshbhirud/QuantumClifford.jl`, branch `master` (PR #742, version 0.11.8, QECCore
+  from `lib/QECCore`).
+- `ConstructedAdapterModel` (in `adapter_cost.jl`):
+  - detects the construction at runtime (`adapters_available()`). No project file
+    points at the fork; PBCCompiler loads and passes its tests without it;
+  - for two-block measurements whose per-block part is a single X or Z logical, it
+    builds the real merged code (X via `logx_ops[i]` on the X/Z-swapped code) and
+    reads off ancilla = new qubits + new checks, `d_joint` rounds, and the max check
+    weights;
+  - caches results per (block, logical index, letter);
+  - keeps the analytic number alongside (`analytic_ancilla` in the per-measurement
+    table);
+  - for more than two blocks, Y parts, multi-logical parts, a missing fork, or a
+    construction that throws, it falls back to the analytic model and **records the
+    reason** in the estimate's notes.
+- Also fixed: the exported `code_n`/`code_k` clashed with QuantumClifford.ECC's.
+  ResourceEstimation now adds methods to those functions instead of defining new
+  ones.
+- Tests (`test_constructed_adapter.jl`):
+  - in the plain test environment, 4 passing plus 1 `@test_skip` with an explanatory
+    message;
+  - in an environment with the fork, **13 passing**: surface d=5 × d=5 Z̄Z̄ = exactly
+    27 ancilla (+13 qubits, +14 checks); caching; X parts; the Y fallback; the
+    gross × gross merge (k₁+k₂−1 asserted inside); a construction failure recorded and
+    cached; both numbers in the estimate.
+- Full suite (plain environment): 2411 passed, 1 broken (the intended E5 skip marker).
+
+## E10: Validation suite and reference comparison
+
+- `docs/dev/estimation_validation.md` holds the hand-computed tests, the property
+  tests, and two benchmark studies (`benchmark/estimation/`, raw outputs in
+  `results/`):
+  - **GoSC Sec. 4 reference:**
+    - time matches: 3.98 h vs 3.97 h;
+    - qubits are +25% (69k vs 55.4k), from per-product routing tiles;
+    - failure is 0.51% vs 0.2%, but GoSC budgets the magic-state error separately;
+      without it we get about 0.16%;
+    - both choose d = 13.
+    The gaps are explained, not tuned.
+  - **E4 vs E5 agreement table** on surface d = 3…11 and BB pairs. The constructed
+    surface adapter costs exactly 6d − 3 ancilla.
+- Findings for the adapter PR:
+  - the inter-code `build_adapter` rejects unequal-length logical supports (the
+    paper's Sec. VII.C allows them);
+  - the two-gross merge reaches Z-check weight 12 with non-minimal representatives.

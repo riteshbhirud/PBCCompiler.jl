@@ -14,6 +14,8 @@ using ..PBCCompiler: Circuit, CircuitOp, affectedqubits
 using ..GadgetShapes: count_gadgets, find_gadgets
 using Moshi.Match: @match
 import QuantumClifford
+# extend (not shadow) QuantumClifford.ECCs code_n/code_k, so `using` both never clashes
+import QuantumClifford.ECC: code_n, code_k
 using QuantumClifford: PauliOperator, nqubits, embed, comm
 import Graphs
 import LinearAlgebra
@@ -38,6 +40,7 @@ export HardwareModel, PLModel, AnalyticPL, FitPL, BBFitPL, TablePL,
        parity_check_matrices, gf2_rank,
        LogicalLayout, validate_layout, pack_sequential, pack_by_interaction, interaction_graph,
        AdapterCostModel, AnalyticAdapterModel, AdapterCost, adapter_cost,
+       ConstructedAdapterModel, adapters_available, block_code,
        EstOp, classify_operations, weight_histogram,
        heavy_hex, tanner_graph, EmbeddingResult, embed_tanner_graph, EmbeddingOverhead, embedding_overhead,
        ScheduleResult, dependency_dag, schedule_operations,
