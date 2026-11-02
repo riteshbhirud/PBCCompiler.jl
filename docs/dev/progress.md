@@ -41,3 +41,25 @@ Work is on the local `dev` branch, created from `riteshbhirud/PBCCompiler.jl`
   bug B3 (gadget bit collision) is flagged as `:bit_rewrite`.
 - The full suite passes, 215/215. The first full run caught an `affine_var` bug
   (Tuple vs Vector) through its doctest; it was fixed before this commit.
+
+## V2: Symbolic Pauli frame
+
+- `src/verification/frame.jl`: `SymbolicPauli`, with X/Z bits that are `AffineBit`s of
+  the outcome variables. Operations: `mul_conditional!` (multiply by `Q^c`),
+  `mul_frame!`, `conjugate!` (by a `CliffordOperator` or a vector of generator
+  images), `commutation_parity`, `evaluate`, `substitute`, and `==` (equality as
+  functions, which is exact because the affine representation is canonical).
+- The frame is tracked without a sign (deviation 3 in the codebase map: the sign is
+  not affine in general, and only commutation parities are observable).
+- Tests (`test/verification/test_frame.jl`, 48 assertions):
+  - `AffineBit` algebra;
+  - 8 random frames over **12 outcome variables**, each put through 6 random
+    conditional multiplications and Clifford conjugations, compared bit for bit
+    against explicit per-branch replay for **all 2^12 assignments**, including
+    commutation parities;
+  - equality-as-functions agrees with exhaustive comparison on 20 random pairs.
+- Test power check: a planted bug (X/Z swapped in the parity) is caught in 17 of 20
+  random trials by the same exhaustive comparison.
+- Added `Random` and `LinearAlgebra` to `test/Project.toml`. The `Pkg.test` sandbox
+  cannot load undeclared stdlibs.
+- Full suite: 263/263 pass.

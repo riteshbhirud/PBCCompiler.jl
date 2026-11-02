@@ -13,13 +13,16 @@ module Verification
 
 using ..PBCCompiler: Circuit, CircuitOp
 using Moshi.Match: @match
-using QuantumClifford: PauliOperator, nqubits, embed, comm
+import QuantumClifford
+using QuantumClifford: PauliOperator, CliffordOperator, nqubits, embed, comm
 
 include("affine.jl")
 include("ops.jl")
 include("wellformed.jl")
+include("frame.jl")
 
 export AffineBit, affine_var, isconstant, evaluate, substitute,
-       check_wellformed, wellformedness_issues, WellformednessIssue
+       check_wellformed, wellformedness_issues, WellformednessIssue,
+       SymbolicPauli, mul_conditional!, mul_frame!, conjugate!, commutation_parity, frame_variables
 
 end # module Verification
