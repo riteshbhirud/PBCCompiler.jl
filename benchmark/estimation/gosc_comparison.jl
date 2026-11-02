@@ -1,22 +1,13 @@
-# Reference comparison: surface-code-only estimate vs Litinski, "A Game of Surface
-# Codes" (Quantum 3, 128, 2019), Sec. 4, minimal setup at p = 1e-4:
-#   100 logical qubits, 10^8 T gates, compact data block (153 tiles) + one 15-to-1
-#   block (11 tiles) = 164 tiles × 2d², d = 13 → ≈ 55,400 physical qubits,
-#   13·11·10^8 code cycles ≈ 4 h at 1 µs per code cycle, final error ≈ 0.2%.
+# Surface-code estimate compared with Litinski, "A Game of Surface Codes" (2019), Sec. 4:
+# 100 qubits and 10^8 T gates, extrapolated linearly from N random π/8 rotations.
 #
 #     julia -tauto --project=test benchmark/estimation/gosc_comparison.jl
 #
-# A 10^8-T circuit cannot be built explicitly. We estimate programs with N random
-# π/8 Pauli-product rotations on 100 qubits (compiled by PBCCompiler), check that time
-# and error per T are independent of N, and extrapolate linearly to 10^8. Settings
-# mirror GoSC's assumptions (each one is printed with the result):
-#   * one surface-code patch per logical qubit (d = 13), p = 1e-4, 1 µs code cycle
-#     (each of the 8 cycle steps is 1/8 µs), no classical reaction time;
-#   * multi-patch Pauli products by lattice surgery: one routing tile (2d² − 1 qubits)
-#     per involved patch and no adapter qubits (AnalyticAdapterModel with
-#     adapter_qubits_per_join = 0, cycle_time_factor = 1);
-#   * one GoSC 15-to-1 factory (11 tiles, 11d cycles per state, 35p³).
-# Nothing is tuned to match the reference.
+# Assumptions:
+#   * one surface-code patch per logical qubit, p = 1e-4
+#   * 1 µs code cycle, no classical reaction time
+#   * lattice surgery with one routing tile per patch and no adapter qubits
+#   * one GoSC 15-to-1 factory (11 tiles, 11d cycles per state, 35p³)
 
 using PBCCompiler
 using PBCCompiler: CircuitOp, preprocess_circuit

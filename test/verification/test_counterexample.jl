@@ -6,7 +6,7 @@ using QuantumClifford: @P_str
 using Random
 const C = CircuitOp
 
-# Bug B1 buried in a larger random circuit: the minimized input isolates the reversed CNOT.
+# bug B1 inside a larger random circuit: minimization isolates the reversed CNOT
 rng = MersenneTwister(808)
 for trial in 1:5
     n = 4
@@ -18,20 +18,19 @@ for trial in 1:5
     @test cx.confirmed
     @test cx.minimized_input !== nothing && length(cx.minimized_input) < length(a)
     @test any(op -> PBCCompiler.Verification._opkind(op) == PBCCompiler.Verification.OP_PAULICOND, cx.minimized_input)
-    # the minimized pair itself is still inequivalent (independent dense re-check)
+    # the minimized pair is still inequivalent under the dense oracle
     mi, mc = cx.minimized_input, cx.minimized_compiled
     @test !dense_oracle(mi, mc; n_data=_width(mi)).agree
-    # the counterexample carries a concrete distinguishing input state and record
+    # concrete distinguishing input state
     @test length(cx.input_state) == 1 << n
     @test abs(cx.prob_input - cx.prob_compiled) > 1e-6
 end
 
-# Bug B2 (unsorted T) only bites when the T is not moved past an earlier Clifford
-# (moving it re-embeds the Pauli correctly), so a preceding Clifford hides it:
+# bug B2 (unsorted T) is hidden by a preceding Clifford
 hidden = [C.ExpQuatPiPauli(P"X", [3]), C.ExpEighPiPauli(P"XZ", [2, 1]), C.ExpQuatPiPauli(P"Z", [3]),
           C.Measurement(P"Z", 1, [1]), C.Measurement(P"Z", 2, [2]), C.Measurement(P"Z", 3, [3])]
 @test verify_compilation(hidden).status == EQUIVALENT
-# with the T first it is exposed, and the counterexample is minimized to the T gate plus measurements
+# with the T first it is exposed and minimized to the T plus measurements
 a = [C.ExpEighPiPauli(P"XZ", [2, 1]), C.ExpQuatPiPauli(P"Z", [3]),
      C.Measurement(P"Z", 1, [1]), C.Measurement(P"Z", 2, [2]), C.Measurement(P"Z", 3, [3])]
 r = verify_compilation(a)
@@ -79,11 +78,10 @@ const C = CircuitOp
 r = verify_compilation([C.ExpEighPiPauli(P"Z", [1]), C.Measurement(P"X", 1, [1])],
                        [C.ExpEighPiPauli(P"-Z", [1]), C.Measurement(P"X", 1, [1])]; outcome_map=:identity)
 @test r.status == NOT_EQUIVALENT
-# T(−Z) normalizes to T(Z)·S†, so the rotations agree and the measurements (X vs ±Y) diverge
+# T(-Z) = T(Z)·S†: rotations agree, measurements (X vs ±Y) diverge
 k, xi, yi = r.counterexample.divergence
 @test k >= 1 && xi !== nothing && yi !== nothing && xi != yi
-# beyond the dense limit the witness is a stabilizer state; marked unconfirmed unless minimization
-# makes it small enough for the dense oracle
+# beyond the dense limit: stabilizer witness, confirmed only if minimization shrinks it
 n = 12
 a = vcat([C.ExpQuatPiPauli(P"X", [q]) for q in 1:n], [C.ExpEighPiPauli(P"Z", [5]), C.PauliConditional(P"Z", [9], P"X", [3])],
          [C.Measurement(P"Z", q, [q]) for q in 1:n])

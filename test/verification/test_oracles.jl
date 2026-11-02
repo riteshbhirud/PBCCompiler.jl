@@ -5,8 +5,7 @@
     using Random
     const V = PBCCompiler.Verification
 
-    # Random channel-changing-or-not mutation of a compiled program (never touches
-    # the input). Returns (mutated, kind).
+    # random mutation of a compiled program, returns (mutated, kind)
     function mutate_compiled(rng, c)
         c = copy(c)
         idx = [i for (i, op) in enumerate(c)]
@@ -79,15 +78,14 @@ const C = CircuitOp
 a = [C.Measurement(P"Z", 1, [1]), C.Measurement(P"Z", 2, [1])]
 b = [C.Measurement(P"Z", 1, [1]), C.Measurement(P"Z", 2, [1])]
 @test dense_oracle(a, b).agree
-# measuring Z then X, versus measuring Z then (Z·X)-ish: equivalent only with a parity map the
-# normal form cannot find; the dense oracle finds the map and reports agreement
+# equivalent only under a parity map: the normal form cannot find it, the dense oracle can
 a2 = [C.Measurement(P"Z", 1, [1]), C.Measurement(P"Z", 2, [2])]
 b2 = [C.Measurement(P"Z", 1, [1]), C.Measurement(P"ZZ", 2, [1, 2])]
 r = verify_compilation(a2, b2)
 @test r.status == UNKNOWN && r.method == :dense_oracle
 @test dense_oracle(a2, b2; outcome_map=:infer).agree
 @test !dense_oracle(a2, b2; outcome_map=:identity).agree
-# with the identity map required, the same pair is refuted with a witness
+# with the identity map the same pair is refuted
 r = verify_compilation(a2, b2; outcome_map=:identity)
 @test r.status == NOT_EQUIVALENT && r.counterexample.confirmed
 @test abs(r.counterexample.prob_input - r.counterexample.prob_compiled) > 0.1
@@ -128,7 +126,7 @@ end
 @test false_pos[] == 0
 @test changing[] >= 10
 @test found[] >= 0.8 * changing[]
-# a mid-size instance beyond the dense limit: compiler bug B1 (reversed CNOT) on 12 qubits
+# beyond the dense limit: bug B1 (reversed CNOT) on 12 qubits
 n = 12
 a = vcat([CircuitOp.ExpQuatPiPauli(P"Z", [q]) for q in 1:n], [CircuitOp.ExpQuatPiPauli(P"X", [q]) for q in 1:n],
          [CircuitOp.ExpEighPiPauli(P"Z", [3]), CircuitOp.PauliConditional(P"Z", [7], P"X", [2])],

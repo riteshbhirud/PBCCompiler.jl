@@ -1,26 +1,3 @@
-# V3: rotation normal form ("push Cliffords to the end").
-#
-# A program is rewritten as
-#
-#     U = PF · F · Iₖ ⋯ I₁
-#
-# where I₁…Iₖ are the recorded items (non-Clifford rotations, conditional
-# rotations, and measurements, all expressed in *input* coordinates), F is an
-# unconditional Clifford frame, and PF is an outcome-dependent Pauli frame (affine
-# in the outcome variables, tracked up to phase). Processing a new operation G that
-# acts after everything so far:
-#
-# * Pauli `Q^c` (θ ≡ π/2, possibly conditional): PF ← PF·Q^c.
-# * Unconditional Clifford rotation exp(-iθ(-1)^s Q), θ ≡ ±π/4:
-#   G·PF = PF·exp(-iθ(-1)^{s⊕c} Q) ∝ PF·Q^{s⊕c}·exp(-iθQ)  with c = [PF, Q],
-#   so PF ← PF·Q^{s⊕c} and F ← exp(-iθQ)·F.
-# * Any other rotation (non-Clifford angle, or conditional Clifford):
-#   record exp(-iθ(-1)^{s⊕c} F†QF) as an item.
-# * Measurement of Q: equivalent to measuring (-1)^c F†QF on the item state.
-#
-# Angles are exact rationals in units of π, normalized mod 1 (exp(-iπP) = −I is a
-# global phase) into (0, 1/2] with the sign carried by `sign`.
-
 @enum ItemKind ITEM_ROTATION ITEM_MEASURE
 
 """
@@ -55,9 +32,9 @@ A program in rotation normal form `U = PF · F · items[end] ⋯ items[1]`:
 - `items`: the [`NFItem`](@ref)s in program order;
 - `fwd`, `inv`: the Clifford frame `F` as the maps `P ↦ F P F†` and `P ↦ F† P F`;
 - `pauli_frame`: the outcome-dependent Pauli frame `PF`. Its constant part is
-  folded into `F`, so every bit is linear in the outcome variables.
-- `final_var`: classical bit ⇒ variable of its final write;
-- `var_bit`: variable ⇒ the classical bit it was written to.
+  folded into `F`, so every bit is linear in the outcome variables;
+- `final_var`: maps each classical bit to the variable of its final write;
+- `var_bit`: maps each variable to the classical bit it was written to.
 
 Use [`frame_clifford`](@ref) to get `F` as a `CliffordOperator`.
 """
@@ -78,13 +55,12 @@ The final unconditional Clifford frame `F` of the normal form.
 """
 frame_clifford(nf::NormalForm) = to_clifford(nf.fwd)
 
-"""Normalize an angle (units of π) modulo 1 into (−1/2, 1/2]."""
+# angle in units of π, reduced mod 1 into (−1/2, 1/2]
 function _normalize_angle(θ::Rational{Int})
     t = mod(θ, 1)
     t > 1 // 2 ? t - 1 : t
 end
 
-# Mutable builder state.
 mutable struct _NFBuilder
     n::Int
     items::Vector{NFItem}
@@ -124,7 +100,7 @@ function _push_op!(b::_NFBuilder, kind::VKind, q::PauliT, angle::Rational{Int}, 
     nothing
 end
 
-# Fold the constant part of the Pauli frame into the Clifford frame.
+# fold the constant part of the Pauli frame into the Clifford frame
 function _finalize(b::_NFBuilder, final_var::Dict{Int,Int}, var_bit::Dict{Int,Int})
     n = b.n
     pc = PauliOperator(0x00, [b.pf.x[j].constant for j in 1:n], [b.pf.z[j].constant for j in 1:n])
@@ -142,8 +118,8 @@ end
 
 Rewrite a program into rotation normal form: all unconditional Clifford
 operations are pushed to a final frame, and non-Clifford rotations, conditional
-rotations and measurements are recorded in input coordinates. Exact: angles are
-rationals, and Pauli signs and outcome dependences are tracked symbolically.
+rotations and measurements are recorded in input coordinates. Angles are exact
+rationals in units of π.
 
 The `Circuit` method throws an `ArgumentError` if the circuit contains a
 construct the verifier does not support (see [`lower`](@ref)).

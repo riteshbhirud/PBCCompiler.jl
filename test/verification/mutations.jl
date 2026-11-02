@@ -1,6 +1,5 @@
-# Mutation operators on compiled programs, shared by the mutation-testing test items
-# and the benchmark scripts. They never edit compiler files: they copy a compiled
-# output and change one thing in it. This file defines no test items.
+# Mutation operators on compiled programs, shared by the mutation tests and the
+# benchmark scripts. Each one copies a compiled program and changes one thing in it.
 
 using PBCCompiler: CircuitOp
 import QuantumClifford
@@ -9,7 +8,7 @@ using Random
 
 const _MV = PBCCompiler.Verification
 
-"""Mutation kinds (spec V9)."""
+"""Mutation kinds accepted by `mutate`."""
 const MUTATION_KINDS = (:flip_condition_bit, :drop_correction, :flip_sign, :swap_anticommuting,
                         :change_letter, :change_angle, :drop_gadget)
 
@@ -39,7 +38,6 @@ end
 
 Apply one mutation of the given kind to a copy of the compiled program `c`.
 `applied` is false when the program has nothing to mutate for that kind.
-`n_data` (qubits above it are magic qubits) is used by `:drop_gadget`.
 """
 function mutate(rng::AbstractRNG, c, kind::Symbol; n_data::Int = _MV._width(c))
     c = copy(c)

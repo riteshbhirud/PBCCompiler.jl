@@ -1,8 +1,6 @@
-# Plot benchmark/verification/results/timing.csv (written by timing.jl).
+# Plot results/timing.csv (written by timing.jl) into timing_vs_*.png next to it.
 #
 #     julia --project=test benchmark/verification/plot_timing.jl
-#
-# Writes timing_vs_{qubits,t_count,outcomes}.png next to the CSV.
 
 using CairoMakie
 

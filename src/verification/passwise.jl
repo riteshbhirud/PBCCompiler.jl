@@ -1,12 +1,5 @@
-# V8: per-pass translation validation.
-#
-# PBCCompiler's passes are individually callable functions. `preprocess_circuit`
-# applies them in the order below, after returning early for circuits with fewer
-# than two ops. The order is duplicated here because the compiler does not expose
-# it as data (hook request H1 in docs/NOTES_FOR_COMPILER.md). A test checks that
-# running these passes in sequence reproduces `preprocess_circuit` exactly, so a
-# change in the compiler's pipeline is noticed.
-
+# Duplicates the pass order of `preprocess_circuit`, which the compiler does not expose.
+# A test checks that the two stay in sync.
 """The compiler passes, in the order `preprocess_circuit` runs them."""
 const PREPROCESS_PASSES = (
     :remove_pauliconditional,
@@ -33,9 +26,9 @@ end
 """
     run_passes(input) -> Vector{Tuple{Symbol,Vector{CircuitOp.Type}}}
 
-Run the compiler's passes one at a time on a copy of `input`, recording the
-program after each one. Mirrors `preprocess_circuit`, including its early return
-for circuits with fewer than two ops.
+Run the compiler's passes one at a time on a copy of `input` and return each
+pass name with the program after that pass. Like `preprocess_circuit`, circuits
+with fewer than two ops are left alone (the result is empty).
 """
 function run_passes(input::AbstractVector{CircuitOp.Type})
     c = collect(CircuitOp.Type, input)
@@ -51,16 +44,15 @@ end
 """
     verify_passes(input; kwargs...) -> Vector{VerificationResult}
 
-Translation validation of each compiler pass: run the passes one at a time and
-verify the program after each pass against the program before it. The first
-result that is not `EQUIVALENT` localizes a problem to that pass. Results come in
-pass order, see [`PREPROCESS_PASSES`](@ref). Use [`verify_passes_detailed`](@ref)
-to also get the intermediate programs.
+Verify each compiler pass separately: run the passes one at a time and check the
+program after each pass against the program before it. Results come in the order
+of [`PREPROCESS_PASSES`](@ref); the first one that is not `EQUIVALENT` points to
+the faulty pass. Use [`verify_passes_detailed`](@ref) to also get the
+intermediate programs.
 
-The outcome record is always the original input's bits (gadget outcomes
-introduced along the way are hidden), and the outcome map is the identity unless
-`outcome_map` is given. Other keyword arguments are passed to
-[`verify_compilation`](@ref) (`minimize` defaults to `false` here).
+Only the bits written by the original input are compared, and the outcome map is
+the identity unless `outcome_map` is given. Other keyword arguments are passed to
+[`verify_compilation`](@ref); `minimize` defaults to `false` here.
 """
 verify_passes(input::AbstractVector{CircuitOp.Type}; kwargs...) = [s.result for s in verify_passes_detailed(input; kwargs...)]
 

@@ -26,10 +26,9 @@ c = vcat([C.Measurement(P"ZZ", i, [1, 3]) for i in 1:5], [C.Measurement(P"XX", 5
          [C.Measurement(P"ZZ", 11, [1, 2])])
 two = SurfaceCodeModel(3)
 gen2 = [BBCodeModel(:gross; intra_ancilla=1, intra_rounds=1, aux_graph_qubits=identity) for _ in 1:2]
-# blocks of capacity 2 via a small generic model is not needed: use two gross blocks but only 4 qubits
 lay, w = pack_by_interaction(c, gen2; n_data=4)
 @test isempty(validate_layout(lay, 1:4))
-# capacity 12 each: everything fits in one block, so no cross-block weight remains
+# capacity 12 each: everything fits in one block
 @test w == 0
 # force capacity 2 per block with 2-qubit generic blocks
 using QuantumClifford: Stabilizer

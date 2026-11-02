@@ -1,7 +1,4 @@
-# V7: counterexample minimization and confirmation.
-
-# Generic delta debugging (ddmin): a 1-minimal sub-sequence of `xs` on which `test`
-# still holds. `test` is assumed to hold on `xs`. Stops after `max_tests` calls.
+# Delta debugging: a 1-minimal subsequence of `xs` on which `test` still holds.
 function _ddmin(test, xs::Vector{T}; max_tests::Int = 500) where {T}
     ntests = 0
     k = 2
@@ -27,7 +24,6 @@ end
 
 _has_measurement(c) = any(op -> _opkind(op) == OP_MEASUREMENT, c)
 
-# Whether the pair is refuted by a cheap oracle run (dense if small, else stabilizer).
 function _still_fails(input, compiled, n; outcome_map, semantics, magic_k, max_dense_qubits, rng, trials)
     (_has_measurement(input) && isempty(wellformedness_issues(input))) || return false
     N = max(n, _width(compiled))
@@ -45,17 +41,16 @@ end
     minimize_counterexample(input; outcome_map = :identity, semantics = :outcomes, magic_k = 1,
                             max_dense_qubits = 10, max_tests = 300, rng) -> (input′, compiled′)
 
-Delta-debug a failing *input* circuit: delete ops while, after recompiling the
-remainder through PBCCompiler's public `preprocess_circuit`, the compiled program
-is still refuted by an oracle. Returns the 1-minimal input found and its compiled
-program. Requires the compiler to be deterministic, which it is.
+Shrink an input circuit whose compilation is wrong. Ops are removed as long as
+compiling the rest with `preprocess_circuit` still gives a program that an oracle
+refutes. Returns the smallest input found and its compiled program.
 """
 function minimize_counterexample(input::AbstractVector{CircuitOp.Type}; outcome_map = :identity, semantics::Symbol = :outcomes,
                                  magic_k::Int = 1, max_dense_qubits::Int = 10, max_tests::Int = 300,
                                  rng::AbstractRNG = Random.default_rng(), trials::Int = 10)
     n = _width(input)
     function test(sub)
-        _width(sub) == n || return false          # keep the data register fixed
+        _width(sub) == n || return false
         comp = try _compile(sub) catch; return false end
         _still_fails(sub, comp, n; outcome_map, semantics, magic_k, max_dense_qubits, rng, trials)
     end
@@ -66,10 +61,9 @@ end
 """
     minimize_pair(input, compiled; n_data, outcome_map = :identity, kwargs...) -> (input′, compiled′)
 
-Minimize an inequivalent (input, compiled) pair that did not come from the
-compiler: delta-debug the set of visible classical bits, dropping each removed
-bit's measurements from *both* programs, while the pair stays refuted. A bit read
-by a `BitConditional` is never removed.
+Shrink an inequivalent pair of programs that did not come from the compiler.
+Measurements of classical bits are removed from both programs as long as the
+pair is still refuted. Bits read by a `BitConditional` are kept.
 """
 function minimize_pair(input::AbstractVector{CircuitOp.Type}, compiled::AbstractVector{CircuitOp.Type};
                        n_data::Int = _width(input), outcome_map = :identity, semantics::Symbol = :outcomes,
@@ -88,7 +82,6 @@ function minimize_pair(input::AbstractVector{CircuitOp.Type}, compiled::Abstract
     (keep_only(input, kept), keep_only(compiled, kept))
 end
 
-# Attach minimization and dense confirmation to a counterexample.
 function _finish_counterexample(cex::Counterexample, input, compiled, n; compiled_by_us::Bool, minimize::Bool,
                                 outcome_map, semantics, magic_k, max_dense_qubits, rng, stats)
     mi, mc = nothing, nothing
@@ -106,7 +99,6 @@ function _finish_counterexample(cex::Counterexample, input, compiled, n; compile
     end
     confirmed = cex.confirmed
     note = cex.note
-    # re-confirm with the dense oracle whenever the (minimized) pair is small enough
     ci, cc = mi === nothing ? (input, compiled) : (mi, mc)
     nn = _width(ci)
     if max(nn, _width(cc)) <= max_dense_qubits

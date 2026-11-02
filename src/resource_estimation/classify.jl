@@ -1,34 +1,20 @@
-# E3: classification of the compiled program's operations, and their costs.
-#
-# Every op of the compiled program becomes one `EstOp`:
-#
-# * Measurement: a Pauli product measurement. It is classified by the code blocks its
-#   *data* support touches:
-#     0 blocks → `:magic` (acts only on magic/ancilla qubits; under the factory model);
-#     1 block  → `:intra` (cost from the block's `intra_measurement_cost`);
-#     ≥ 2      → `:cross` (cost from the adapter model).
-#   A joint measurement that also touches a magic qubit consumes one magic state.
-# * π/4 rotations (conditional or not) and `PauliConditional`: Clifford operations,
-#   costed as one Pauli product measurement on the same support. A P_{π/4} is
-#   implemented by measuring P⊗Y against a |Y⟩ resource (Litinski, GoSC Sec. 1),
-#   so no magic state is needed.
-# * π/2 rotations and Paulis (conditional or not): Pauli-frame updates, tracked
-#   classically at no quantum cost.
-# * Unlifted π/8 rotations: a measurement that consumes a magic state.
-
 """
     EstOp
 
 One operation of the compiled program with its classification and cost:
 
-- `index`: compiled op index; `kind`: `:measurement`, `:clifford`, `:t_rotation`,
-  `:frame`, `:other`; `class`: `:intra`, `:cross`, `:magic`, `:free`;
-- `pauli`: the full-width Pauli, used for dependencies;
-- `blocks` and `weights`: the data blocks touched and the logical weight on each;
-- `consumes_magic`;
-- classical `reads` and `writes` (bit indices; `writes = 0` if none);
-- `ancilla`, `rounds`, `round_time` (seconds), `d_joint`, `cost_source`, `note`, and
-`alt_ancilla` (the analytic model's count when the constructed model was used, else −1).
+- `index`: index of the op in the compiled program
+- `kind`: `:measurement`, `:clifford`, `:t_rotation`, `:frame` or `:other`
+- `class`: `:intra` (one block), `:cross` (several blocks), `:magic` (magic qubits only) or `:free`
+- `pauli`: the full-width Pauli
+- `blocks`, `weights`: data blocks touched and the logical weight on each
+- `consumes_magic`: whether the op uses a magic state
+- `reads`, `writes`: classical bit indices (`writes = 0` if none)
+- `ancilla`, `rounds`, `round_time` (seconds), `d_joint`, `cost_source`, `note`
+- `alt_ancilla`: the analytic model's ancilla count when the constructed model was used, else -1
+
+Pi/4 rotations and `PauliConditional`s are costed as one Pauli product measurement;
+Pauli and pi/2 rotations are Pauli-frame updates at no cost (Litinski 2019, Sec. 1).
 """
 mutable struct EstOp
     index::Int
@@ -66,9 +52,9 @@ end
     classify_operations(compiled, layout, hw; n_data, adapter_model = nothing,
                         adapter_kwargs = (;)) -> Vector{EstOp}
 
-Classify and cost every op of a compiled program (see the file header). Data qubits
-are `1:n_data`; qubits above `n_data` are magic qubits. Throws if a cross-block
-measurement exists but no `adapter_model` is given.
+Classify and cost every op of a compiled program, returning one [`EstOp`](@ref)
+per op. Data qubits are `1:n_data`; higher indices are magic qubits. Throws if a
+cross-block measurement exists but no `adapter_model` is given.
 """
 function classify_operations(c::AbstractVector{CircuitOp.Type}, layout::LogicalLayout, hw::HardwareModel;
                              n_data::Int, adapter_model::Union{Nothing,AdapterCostModel} = nothing,
@@ -101,7 +87,7 @@ function classify_operations(c::AbstractVector{CircuitOp.Type}, layout::LogicalL
                     p = QuantumClifford.tensor(cp, tp); q = vcat(cq, tq)
                     kind = :clifford
                 else
-                    kind = :other                    # PrepMagic, nested conditionals: not costed
+                    kind = :other
                 end
             end
         end
@@ -119,7 +105,7 @@ function classify_operations(c::AbstractVector{CircuitOp.Type}, layout::LogicalL
         if kind == :frame
             push!(ops, EstOp(i, kind, :free, P, bs, ws, false, reads, writes, 0, 0, 0.0, 0, :none, "Pauli frame", -1))
         elseif isempty(bs)
-            # magic-only: a single-qubit measurement of an injected magic patch, one code cycle
+            # measurement of an injected magic patch: one code cycle
             push!(ops, EstOp(i, kind, :magic, P, bs, ws, false, reads, writes, 0, 1, ref_cycle, 0, :magic, "", -1))
         elseif length(bs) == 1
             model = layout.code_blocks[bs[1]]
@@ -142,8 +128,8 @@ end
 """
     weight_histogram(ops) -> Dict{Int,Int}
 
-Histogram of per-block logical weights over all costed measurements (weight ⇒
-number of (measurement, block) pairs with that weight).
+Histogram of per-block logical weights over all costed measurements: maps each
+weight to the number of (measurement, block) pairs with that weight.
 """
 function weight_histogram(ops::Vector{EstOp})
     h = Dict{Int,Int}()

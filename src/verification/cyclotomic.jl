@@ -1,12 +1,3 @@
-# Exact arithmetic in the cyclotomic field Q(ζ₈), ζ₈ = e^{iπ/4}.
-#
-# Every amplitude in a magic-state gadget proof lies in Q(ζ₈): projectors (factors
-# of 1/2), Paulis, phases diag(1, ζ^k), and the magic state (|0⟩ + ζ^k|1⟩)/√2 with
-# 1/√2 = (ζ − ζ³)/2. Doing the proof in this field makes it exact rather than a
-# floating-point check.
-#
-# An element is a₀ + a₁ζ + a₂ζ² + a₃ζ³ with rational aᵢ, using ζ⁴ = −1.
-
 """
     Cyc8(a0, a1, a2, a3)
 
@@ -72,7 +63,7 @@ end
 """Complex conjugate (the automorphism ζ ↦ ζ⁻¹ = ζ⁷)."""
 Base.conj(a::Cyc8) = galois(a, 7)
 
-"""Field norm, a rational number: the product of the four Galois conjugates."""
+"""The field norm of `a`, a rational number."""
 function fieldnorm(a::Cyc8)
     p = a * galois(a, 3) * galois(a, 5) * galois(a, 7)
     all(iszero, p.c[2:4]) || error("internal: norm is not rational")
@@ -87,10 +78,10 @@ end
 
 Base.:/(a::Cyc8, b::Cyc8) = a * inv(b)
 
-"""`|a|²` as an element of the field (it is real)."""
+"""`|a|²` as an element of the field."""
 abs2c(a::Cyc8) = a * conj(a)
 
-"""`1/√2 = (ζ − ζ³)/2`."""
+"""`1/√2` as an element of the field."""
 const INV_SQRT2 = Cyc8(0, 1 // 2, 0, -1 // 2)
 
 """
@@ -107,7 +98,6 @@ end
 
 Base.show(io::IO, a::Cyc8) = print(io, "Cyc8", string.(a.c))
 
-# Small exact matrix helpers (dense, Cyc8 entries).
 function _cmatmul(A::Matrix{Cyc8}, B::Matrix{Cyc8})
     size(A, 2) == size(B, 1) || throw(DimensionMismatch())
     C = fill(Cyc8(0), size(A, 1), size(B, 2))

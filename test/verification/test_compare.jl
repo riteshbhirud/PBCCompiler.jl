@@ -52,7 +52,7 @@ T(p, q) = C.ExpEighPiPauli(p, q); S(p, q) = C.ExpQuatPiPauli(p, q); X(p, q) = C.
 @test v([T(P"X", [1]), S(P"Z", [2]), T(P"X", [1]), M1, M2], [S(P"X", [1]), S(P"Z", [2]), M1, M2]).status == EQUIVALENT
 # pushing a Clifford through a measurement (what remove_clifford does)
 @test v([S(P"X", [1]), M1], [C.Measurement(P"Y", 1, [1])]).status == EQUIVALENT
-# outcome-flipping Pauli: equivalent only under the parity map bit1 ↦ 1 ⊕ m
+# outcome-flipping Pauli: equivalent only under the parity map bit1 = 1 ⊕ m
 r = v([M1], [X(P"X", [1]), M1])
 @test r.status == EQUIVALENT && !r.certificate.identity_map
 @test v([M1], [X(P"X", [1]), M1]; outcome_map=:identity).status != EQUIVALENT
@@ -129,7 +129,7 @@ const C = CircuitOp
 # B3: gadget bit collides with a program bit (contract violation, never certified)
 r = verify_compilation([C.Measurement(P"Z", 1, [1]), C.ExpEighPiPauli(P"X", [1]), C.Measurement(P"Z", 2, [1])])
 @test r.status != EQUIVALENT && !isempty(r.wellformedness_errors)
-# B4: no measurement, so the compiler throws; reported, not crashed
+# B4: no measurement, the compiler throws and the error is reported
 r = verify_compilation([C.ExpQuatPiPauli(P"Z", [1]), C.ExpQuatPiPauli(P"X", [1])])
 @test r.status == UNKNOWN && occursin("compiler threw", only(r.stats[:reasons]))
 end

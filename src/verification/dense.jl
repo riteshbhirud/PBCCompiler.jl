@@ -1,16 +1,8 @@
-# Dense simulation primitives (ComplexF64), shared by the dense oracle and the tests.
-#
-# Qubit j corresponds to bit (j-1) of the row index (little-endian). Operators act
-# on the rows of a matrix K whose columns are states, so simulating the operator
-# itself is K = I, and simulating a set of input states is K = [ψ₁ ψ₂ …].
-#
-# This simulator gives every CircuitOp its semantics *directly* (for example
-# PauliConditional via its projector definition), independently of the lowering
-# used by the normal form. It is therefore a genuine cross-check.
+# qubit j is bit j-1 of the row index; operators act on the rows of K, whose columns are states
 
 const DENSE_MAX_QUBITS = 30
 
-"""A Pauli operator as bit masks: P|r⟩ = coeff·(−1)^{popcount(r & zmask)}·|r ⊻ xmask⟩."""
+# P|r⟩ = coeff * (-1)^popcount(r & zmask) * |r ⊻ xmask⟩
 struct DensePauli
     xmask::Int
     zmask::Int
@@ -30,7 +22,7 @@ function DensePauli(p::PauliOperator)
     DensePauli(xm, zm, ComplexF64(im)^mod(Int(p.phase[]) + ny, 4))
 end
 
-"""out ← P·K (out and K must not alias)."""
+"""Set `out = P*K`. `out` and `K` must not alias."""
 function pauli_mul!(out::AbstractMatrix{ComplexF64}, P::DensePauli, K::AbstractMatrix{ComplexF64})
     nr = size(K, 1)
     @inbounds for col in axes(K, 2), r in 0:nr-1
@@ -40,7 +32,7 @@ function pauli_mul!(out::AbstractMatrix{ComplexF64}, P::DensePauli, K::AbstractM
     out
 end
 
-"""K ← exp(-iπθ·P)·K."""
+"""Apply `exp(-iπθ P)` to `K` in place (`θ` in units of π)."""
 function apply_rotation!(K::AbstractMatrix{ComplexF64}, P::DensePauli, θ::Rational{Int})
     tmp = similar(K)
     pauli_mul!(tmp, P, K)
@@ -49,7 +41,7 @@ function apply_rotation!(K::AbstractMatrix{ComplexF64}, P::DensePauli, θ::Ratio
     K
 end
 
-"""K ← ½(I + (−1)^outcome P)·K, the projector onto the outcome-`outcome` eigenspace."""
+"""Apply the projector `(I + (-1)^outcome P)/2` to `K` in place."""
 function apply_projector!(K::AbstractMatrix{ComplexF64}, P::DensePauli, outcome::Bool)
     tmp = similar(K)
     pauli_mul!(tmp, P, K)
@@ -58,7 +50,7 @@ function apply_projector!(K::AbstractMatrix{ComplexF64}, P::DensePauli, outcome:
     K
 end
 
-"""K ← C·K with C = (I + P₁ + P₂ − P₁P₂)/2 (apply P₂ when P₁ = −1)."""
+"""Apply `P2` controlled on `P1 = -1`, i.e. `(I + P1 + P2 - P1*P2)/2`, to `K` in place."""
 function apply_pauliconditional!(K::AbstractMatrix{ComplexF64}, P1::DensePauli, P2::DensePauli)
     t1 = similar(K); t2 = similar(K); t12 = similar(K)
     pauli_mul!(t1, P1, K)
@@ -76,13 +68,10 @@ function dense_matrix(p::PauliOperator)
     pauli_mul!(out, DensePauli(p), K)
 end
 
-"""The magic state (|0⟩ + ζ₈^k |1⟩)/√2 as a vector (k = 1 is T|+⟩)."""
+# (|0⟩ + e^{ikπ/4}|1⟩)/√2; k = 1 is T|+⟩
 _magic_vector(k::Int) = ComplexF64[1, cispi(k / 4)] / sqrt(2)
 
-"""
-Initial operator: columns are the 2^n_data computational basis inputs, tensored with
-the magic state on each qubit n_data+1 … N.
-"""
+# columns: each data basis state tensored with magic states on qubits n_data+1:N
 function _initial_operator(n_data::Int, N::Int, magic_k::Int)
     N <= DENSE_MAX_QUBITS || throw(ArgumentError("too many qubits for dense simulation"))
     D = 1 << n_data
@@ -103,7 +92,6 @@ end
 
 _dense_embed(p::PauliT, q::Vector{Int}, N::Int) = DensePauli(embed(N, q, p))
 
-# Apply a non-measurement op given the current register; errors on unsupported ops.
 function _dense_apply_op!(K, op, N::Int, reg::Dict{Int,Bool})
     k = _opkind(op)
     if _isrotation(k)
@@ -140,18 +128,8 @@ function dense_unitary(c::AbstractVector{CircuitOp.Type}, N::Int)
     K
 end
 
-"""
-    _dense_dfs(visit, c, N, K0; allow, max_leaves, prune_tol)
-
-Depth-first enumeration of all measurement-outcome branches of `c`, starting
-from the operator `K0` (rows: 2^N). At each measurement of bit `b` with candidate
-outcome `v`, the branch is explored only if `allow(op_index, b, v, reg)` is
-true. Branches whose operator has squared Frobenius norm `≤ prune_tol` are
-dropped (they contribute nothing). At each leaf, `visit(K, reg, outcomes)` is
-called, where `outcomes` lists the `(op index, bit, value)` triples of that
-branch. Returns `(leaves_visited, complete)`; `complete` is false if
-`max_leaves` was hit.
-"""
+# visits every outcome branch allowed by allow(i, b, v, reg), calling visit(K, reg, [(i, b, v)...]) at
+# each leaf; returns (leaves_visited, complete), with complete = false if max_leaves was hit
 function _dense_dfs(visit, c::AbstractVector{CircuitOp.Type}, N::Int, K0::Matrix{ComplexF64};
                     allow = (i, b, v, reg) -> true, max_leaves::Int = typemax(Int), prune_tol::Float64 = 1e-28)
     counter = Ref(0)

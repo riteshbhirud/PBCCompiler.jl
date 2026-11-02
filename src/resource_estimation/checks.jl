@@ -1,5 +1,3 @@
-# Op accessors and explicit parity-check matrices for the code models.
-
 const EPauli = PauliOperator{Array{UInt8,0},Vector{UInt64}}
 
 _measurement_parts(op) = @match op begin
@@ -12,7 +10,6 @@ _bitcond_parts_est(op) = @match op begin
     _ => nothing
 end
 
-# (pauli, qubits, angle in units of π) of a rotation-like op, or nothing
 _rotation_parts(op) = @match op begin
     CircuitOp.Pauli(p, q) => (p, q, 1 // 2)
     CircuitOp.ExpHalfPiPauli(p, q) => (p, q, 1 // 2)
@@ -26,24 +23,19 @@ _paulicond_parts_est(op) = @match op begin
     _ => nothing
 end
 
-"""Qubits on which the Pauli `p` (letters on `qubits`) is not the identity, sorted."""
 _pauli_support(p::PauliOperator, qubits::Vector{Int}) = sort!([qubits[j] for j in eachindex(qubits) if p[j][1] || p[j][2]])
 
 _est_width(c) = maximum((isempty(affectedqubits(op)) ? 0 : maximum(affectedqubits(op)) for op in c); init = 0)
-
-# ---------------------------------------------------------------- check matrices
 
 """
     parity_check_matrices(m::CodeModel) -> (Hx::BitMatrix, Hz::BitMatrix)
 
 Explicit X- and Z-check matrices of the model's code.
 
-- Surface: the rotated surface code of distance `d`. Qubit `(i, j)` (row-major) is
-  index `i·d + j + 1`. There are (d−1)² weight-4 checks with X/Z alternating in a
-  checkerboard, plus 2(d−1) weight-2 boundary checks: X on the top and bottom
-  edges, Z on the left and right.
-- BB: `Hx = [A | B]`, `Hz = [Bᵀ | Aᵀ]` with `x = S_l ⊗ I_m`, `y = I_l ⊗ S_m` ([BB] Eq. 1).
-- Generic: read from the wrapped QuantumClifford code.
+- Surface: the rotated surface code of distance `d`, with qubit `(i, j)` at index
+  `i*d + j + 1` (row-major); X boundaries on the top and bottom, Z on the left and right.
+- BB: `Hx = [A | B]`, `Hz = [B' | A']` (Bravyi et al. 2024, Eq. 1).
+- Generic: taken from the wrapped QuantumClifford code.
 """
 function parity_check_matrices(m::SurfaceCodeModel)
     d = m.d
@@ -54,12 +46,12 @@ function parity_check_matrices(m::SurfaceCodeModel)
         iseven(i + j) ? push!(X, s) : push!(Z, s)
     end
     for j in 0:d-2
-        isodd(j) && push!(X, [q(0, j), q(0, j + 1)])               # top: X where the bulk below is Z
-        iseven(j) && push!(X, [q(d - 1, j), q(d - 1, j + 1)])      # bottom
+        isodd(j) && push!(X, [q(0, j), q(0, j + 1)])
+        iseven(j) && push!(X, [q(d - 1, j), q(d - 1, j + 1)])
     end
     for i in 0:d-2
-        iseven(i) && push!(Z, [q(i, 0), q(i + 1, 0)])              # left: Z where the bulk is X
-        isodd(i) && push!(Z, [q(i, d - 1), q(i + 1, d - 1)])       # right
+        iseven(i) && push!(Z, [q(i, 0), q(i + 1, 0)])
+        isodd(i) && push!(Z, [q(i, d - 1), q(i + 1, d - 1)])
     end
     (_rows_to_matrix(X, d^2), _rows_to_matrix(Z, d^2))
 end
@@ -112,7 +104,11 @@ function parity_check_matrices(m::GenericCSSModel)
     (_rows_to_matrix(rowsx, n), _rows_to_matrix(rowsz, n))
 end
 
-"""Rank of a matrix over GF(2)."""
+"""
+    gf2_rank(H::AbstractMatrix{Bool}) -> Int
+
+Rank of a matrix over GF(2).
+"""
 function gf2_rank(H::AbstractMatrix{Bool})
     M = BitMatrix(H); r = 0
     nr, nc = size(M)

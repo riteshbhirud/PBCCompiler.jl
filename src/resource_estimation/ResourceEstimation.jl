@@ -14,7 +14,7 @@ using ..PBCCompiler: Circuit, CircuitOp, affectedqubits
 using ..GadgetShapes: count_gadgets, find_gadgets
 using Moshi.Match: @match
 import QuantumClifford
-# extend (not shadow) QuantumClifford.ECCs code_n/code_k, so `using` both never clashes
+# extend rather than shadow QuantumClifford's code_n/code_k
 import QuantumClifford.ECC: code_n, code_k
 using QuantumClifford: PauliOperator, nqubits, embed, comm
 import Graphs

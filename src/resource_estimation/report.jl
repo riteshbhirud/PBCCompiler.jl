@@ -1,5 +1,3 @@
-# Printing and Dict export of resource estimates.
-
 _fmt_time(s) = s >= 3600 ? string(round(s / 3600; sigdigits = 3), " h") : s >= 60 ? string(round(s / 60; sigdigits = 3), " min") :
                s >= 1 ? string(round(s; sigdigits = 3), " s") : s >= 1e-3 ? string(round(s * 1e3; sigdigits = 3), " ms") :
                string(round(s * 1e6; sigdigits = 3), " µs")

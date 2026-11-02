@@ -1,14 +1,7 @@
-# Mutation-testing report for the verifier.
+# Mutation-testing report for the verifier. Writes results/mutation_report.csv and
+# prints a markdown table.
 #
 #     julia -tauto --project=test benchmark/verification/mutation_report.jl [trials] [seed]
-#
-# For small random programs, compile with PBCCompiler, apply each mutation kind to a
-# copy of the compiled output, decide with the dense oracle (identity outcome map,
-# PBCCompiler's contract) whether the mutation changes the program's behaviour, and
-# record whether the verifier reports NOT_EQUIVALENT:
-#   * with the default oracle stack, and
-#   * with the dense oracle disabled (refutation by the stabilizer oracle only).
-# Writes benchmark/verification/results/mutation_report.csv and prints a markdown table.
 
 using PBCCompiler
 using PBCCompiler.Verification: random_clifford_t_circuit, dense_oracle, _width

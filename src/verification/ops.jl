@@ -1,7 +1,3 @@
-# Read-only accessors for `CircuitOp`s, written independently of the compiler's own
-# helpers (spec rule 0.2: the verifier reuses only the data types and
-# QuantumClifford primitives).
-
 const PauliT = PauliOperator{Array{UInt8,0},Vector{UInt64}}
 
 """Kinds of `CircuitOp` as seen by the verifier."""
@@ -27,7 +23,7 @@ _kindname(k::OpKind)::String = _KIND_NAMES[k]
 
 _isrotation(k::OpKind) = k == OP_PAULI || k == OP_HALFPI || k == OP_QUATPI || k == OP_EIGHPI
 
-"""Rotation angle of a rotation-like op kind, in units of π, for `exp(-iθπ P)`."""
+# angle θ in units of π, for exp(-iθπ P)
 function _rotation_angle(k::OpKind)::Rational{Int}
     k == OP_PAULI && return 1 // 2   # P ∝ exp(-iπ/2 P)
     k == OP_HALFPI && return 1 // 2
@@ -36,7 +32,6 @@ function _rotation_angle(k::OpKind)::Rational{Int}
     throw(ArgumentError("not a rotation kind: $k"))
 end
 
-# Fields of single-Pauli ops (Measurement and the rotations).
 function _pauli_and_qubits(op::CircuitOp.Type)::Tuple{PauliT,Vector{Int}}
     @match op begin
         CircuitOp.Measurement(p, _, q) => (p, q)
@@ -68,7 +63,7 @@ _prepmagic_parts(op::CircuitOp.Type)::Tuple{Int,Vector{Int}} = @match op begin
     _ => throw(ArgumentError("not a PrepMagic: $op"))
 end
 
-"""All qubit indices an op touches, in field order (may contain duplicates)."""
+# may contain duplicates
 function _raw_qubits(op::CircuitOp.Type)::Vector{Int}
     k = _opkind(op)
     if k == OP_MEASUREMENT || _isrotation(k)
@@ -84,10 +79,8 @@ function _raw_qubits(op::CircuitOp.Type)::Vector{Int}
     end
 end
 
-"""Sorted, unique qubit support of an op."""
 _support(op::CircuitOp.Type) = sort!(unique(_raw_qubits(op)))
 
-"""Largest qubit index used by any op (0 for an empty circuit)."""
 function _width(c::AbstractVector{CircuitOp.Type})
     w = 0
     for op in c
@@ -97,8 +90,6 @@ function _width(c::AbstractVector{CircuitOp.Type})
     w
 end
 
-"""Whether the Pauli has phase ±1 (as opposed to ±i)."""
 _ishermitian(p::PauliOperator) = iseven(p.phase[])
 
-"""Whether the Pauli is (a phase times) the identity."""
 _isidentity(p::PauliOperator) = all(iszero, p.xz)

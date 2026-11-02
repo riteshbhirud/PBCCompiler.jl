@@ -1,9 +1,7 @@
-# Long-running cross-check: the normal-form verdict must never contradict the dense
-# oracle. Usage (from the repository root):
+# Long cross-check that the normal-form verdict never contradicts the dense oracle.
+# Exits with status 1 on any contradiction.
 #
 #     julia -tauto --project=test benchmark/verification/long_crosscheck.jl [ncases] [seed]
-#
-# Prints a summary line. Exits with status 1 on any contradiction.
 
 using PBCCompiler
 using PBCCompiler.Verification: random_clifford_t_circuit, dense_oracle, _width

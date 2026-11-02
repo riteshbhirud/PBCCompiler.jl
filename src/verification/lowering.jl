@@ -1,13 +1,3 @@
-# Lowering of `CircuitOp` programs to a flat list of Pauli rotations and
-# measurements over a fixed number of qubits.
-#
-# Classical bits are renamed to SSA-style outcome variables: every measurement
-# *write* gets a fresh variable id (its op index), and a `BitConditional` reads
-# the variable of the most recent write to its bit. That makes register
-# overwrites sound without any special casing. Overwrites are reported by V1;
-# the runtime semantics, "a bit holds its latest write", is what the lowering
-# implements.
-
 @enum VKind V_ROT V_MEAS
 
 """
@@ -18,7 +8,7 @@ One lowered operation.
 - Rotation (`V_ROT`): apply `exp(-iπ·angle·(-1)^sign · pauli)` in the branches
   where `cond == 1`.
 - Measurement (`V_MEAS`): measure `(-1)^sign · pauli` and write the outcome
-  (1 ⇔ eigenvalue −1) to variable `var`, which stands for classical bit `bit`.
+  (1 means eigenvalue −1) to variable `var`, which stands for classical bit `bit`.
 
 `src` is the index of the originating op in the input circuit.
 """
@@ -38,8 +28,8 @@ _vrot(p, angle, cond, src) = VOp(V_ROT, p, angle, AffineBit(false), cond, 0, 0, 
 """
     LoweredProgram
 
-Result of lowering a circuit: the op list over `n` qubits, the SSA variable of
-the final write to each classical bit (`final_var`), the classical bit of every
+Result of lowering a circuit: the op list over `n` qubits, the outcome variable
+of the final write to each classical bit (`final_var`), the classical bit of every
 variable (`var_bit`), and every construct that could not be lowered
 (`unsupported`, as `(op index, reason)` pairs).
 """
@@ -63,13 +53,15 @@ end
     lower(c, n::Int; replacements = Dict()) -> LoweredProgram
 
 Lower the circuit `c` to rotations and measurements on qubits `1:n`. Unsupported
-constructs are recorded in `unsupported`: `PrepMagic` (no defined semantics),
-nested `BitConditional`, conditional measurements, reads before writes, and
-malformed ops (including ops on qubits outside `1:n`).
+constructs are recorded in `unsupported`: `PrepMagic`, nested `BitConditional`,
+conditional measurements, reads before writes, and malformed ops (including ops
+on qubits outside `1:n`).
+
+Each measurement gets a fresh outcome variable (its op index), and a
+`BitConditional` reads the variable of the latest write to its bit.
 
 `replacements[i] = (j, vops, writes)` replaces ops `i:j` by the given `vops`, and
-records each `(bit, var)` in `writes` as a write of `bit` with variable `var`. This is
-how proved gadgets are spliced in.
+records each `(bit, var)` in `writes` as a write of `bit` with variable `var`.
 """
 function lower(c::AbstractVector{CircuitOp.Type}, n::Int;
                replacements::Dict{Int,Tuple{Int,Vector{VOp},Vector{Tuple{Int,Int}}}} =
@@ -122,8 +114,7 @@ function _lower_op!(prog::LoweredProgram, op, i::Int, cond::AffineBit)
         p1 isa String && (push!(prog.unsupported, (i, p1)); return)
         p2 = _embed_checked(tp, tq, n, "PauliConditional target")
         p2 isa String && (push!(prog.unsupported, (i, p2)); return)
-        # C = Π₊ + Π₋P₂ = (I + P₁ + P₂ − P₁P₂)/2 = e^{-iπ/4}·exp(-iπ/4 P₁)·exp(-iπ/4 P₂)·exp(+iπ/4 P₁P₂)
-        # (all three commute; P₁ and P₂ have disjoint support, so P₁P₂ is Hermitian).
+        # (I + P₁ + P₂ − P₁P₂)/2 ∝ exp(-iπ/4 P₁) exp(-iπ/4 P₂) exp(iπ/4 P₁P₂)
         push!(prog.ops, _vrot(p1, 1 // 4, cond, i))
         push!(prog.ops, _vrot(p2, 1 // 4, cond, i))
         push!(prog.ops, _vrot(p1 * p2, -1 // 4, cond, i))

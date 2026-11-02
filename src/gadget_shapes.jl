@@ -1,14 +1,9 @@
 """
     PBCCompiler.GadgetShapes
 
-Structural recognition of magic-state gadgets in a compiled PBC program. It
-depends only on the `CircuitOp` data types and QuantumClifford, and is shared by
-the verifier (which *proves* each recognized gadget) and the resource estimator
-(which *counts* them).
-
-Recognition is driven by the template table [`GADGET_TEMPLATES`](@ref), so a new
-gadget shape can be supported by adding a template, without changing the
-matcher.
+Find magic-state gadgets in a compiled PBC program by their shape. Used by the
+verifier and the resource estimator. The recognized shapes are listed in
+[`GADGET_TEMPLATES`](@ref).
 """
 module GadgetShapes
 
@@ -21,16 +16,13 @@ export GadgetTemplate, GADGET_TEMPLATES, GadgetMatch, find_gadgets, count_gadget
 """
     GadgetTemplate(name, joint_magic_letter, magic_measure_letter, max_corrections, description)
 
-The shape of a magic-state gadget, as contiguous ops:
+The shape of a magic-state gadget, made of consecutive ops:
 
-1. a joint `Measurement` whose Pauli acts on data qubits and on exactly one magic
-   qubit `a` with the letter `joint_magic_letter` (`'X'`, `'Y'` or `'Z'`);
-2. a single-qubit `Measurement` of `a` with the letter `magic_measure_letter`;
-3. up to `max_corrections` `BitConditional` rotations that act only on data qubits
-   and read one of the two outcome bits above.
+1. a joint `Measurement` on data qubits and exactly one magic qubit `a`, with letter `joint_magic_letter` (`'X'`, `'Y'` or `'Z'`) on `a`;
+2. a single-qubit `Measurement` of `a` with letter `magic_measure_letter`;
+3. up to `max_corrections` `BitConditional` rotations on data qubits that read one of the two outcome bits.
 
-Only the *shape* is matched here. Whether the gadget is correct is proved
-separately, by the verifier.
+A template only describes the shape; it says nothing about whether the gadget is correct.
 """
 struct GadgetTemplate
     name::Symbol
@@ -41,10 +33,12 @@ struct GadgetTemplate
 end
 
 """
-The gadget shapes known to the recognizer. The default entry is the shape
-emitted by PBCCompiler's `gadgetize`: measure `P⊗Z` with the magic qubit, measure
-the magic qubit in `X`, then apply `P_{π/4}` if the first outcome is 1 and `P_{π/2}`
-if the second is 1.
+    GADGET_TEMPLATES
+
+The gadget shapes recognized by default. It contains the shape produced by
+PBCCompiler's `gadgetize`: measure `P⊗Z` with the magic qubit, measure the magic
+qubit in `X`, then apply `P_{π/4}` if the first outcome is 1 and `P_{π/2}` if the
+second is 1.
 """
 const GADGET_TEMPLATES = GadgetTemplate[
     GadgetTemplate(:pi8_autocorrected, 'Z', 'X', 2,
@@ -69,7 +63,6 @@ struct GadgetMatch
     magic_bit::Int
 end
 
-# Letter of `p` at position `pos` ('I', 'X', 'Y' or 'Z').
 function _letter(p::PauliOperator, pos::Int)
     x, z = p[pos]
     x ? (z ? 'Y' : 'X') : (z ? 'Z' : 'I')
@@ -127,9 +120,9 @@ end
 """
     find_gadgets(c, n_data::Int; templates = GADGET_TEMPLATES) -> Vector{GadgetMatch}
 
-Scan a compiled program (qubits `> n_data` are magic qubits) and return every
-non-overlapping gadget matching one of the templates, in program order. The
-first template that matches at a position wins.
+Return the non-overlapping gadgets in a compiled program that match one of
+`templates`, in program order. Qubits above `n_data` are magic qubits. When
+several templates match at the same position, the first one is used.
 """
 function find_gadgets(c::AbstractVector{CircuitOp.Type}, n_data::Int; templates = GADGET_TEMPLATES)
     out = GadgetMatch[]
@@ -153,8 +146,8 @@ end
 """
     count_gadgets(c, n_data::Int; templates = GADGET_TEMPLATES) -> Dict{Symbol,Int}
 
-Number of recognized gadgets of each template in a compiled program, i.e. the
-number of magic states it consumes, by gadget type.
+Count the gadgets of each template in a compiled program, which is the number of
+magic states it consumes by gadget type.
 """
 function count_gadgets(c::AbstractVector{CircuitOp.Type}, n_data::Int; templates = GADGET_TEMPLATES)
     d = Dict{Symbol,Int}()

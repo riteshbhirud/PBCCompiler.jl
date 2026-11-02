@@ -1,51 +1,29 @@
-# Top-level verification entry points.
-
 """
     verify_compilation(input::Circuit, compiled::Circuit; kwargs...) -> VerificationResult
     verify_compilation(input::Circuit; kwargs...) -> VerificationResult
 
-Check that `compiled` implements the same logical operation as `input`. The
-one-argument form compiles `input` with PBCCompiler's `preprocess_circuit` first
-(on a copy). It defaults to `outcome_map = :identity`, because PBCCompiler's
-runtime reads raw bits: the compiler's contract is that every input bit keeps its
-index.
+Check that `compiled` implements the same logical operation as `input`, and
+return a [`VerificationResult`](@ref) whose status is `EQUIVALENT`,
+`NOT_EQUIVALENT` or `UNKNOWN`. The one-argument form compiles a copy of `input`
+with `preprocess_circuit` first, and defaults to `outcome_map = :identity`, since
+the compiler is expected to keep every classical bit at its index.
 
-Method layers, in order:
-
-1. well-formedness checks ([`check_wellformed`](@ref)) on both programs;
-2. gadget lifting: every magic-state gadget in `compiled` is recognized and proved
-   exactly ([`lift_gadgets`](@ref));
-3. normal form, canonicalization and comparison. **Sound**: `EQUIVALENT` is only
-   returned when the canonical forms match. **Complete** for compilers that push
-   Cliffords through, reorder commuting operations, merge or split rotations about
-   the same Pauli, and use the recognized gadgets. It cannot prove equivalences
-   that need other identities (for example rewriting a measurement using the
-   stabilizers of the current state). Those cases end up `UNKNOWN`, or go to the
-   oracles;
-4. oracles (`oracle = :auto`, `:dense`, `:stabilizer`, or `:none`). They can only
-   *refute*: a found difference gives `NOT_EQUIVALENT` with a [`Counterexample`](@ref).
-   Agreement of a numerical oracle never yields `EQUIVALENT`.
+`EQUIVALENT` is only returned when the two programs are proved equivalent.
+`NOT_EQUIVALENT` comes with a [`Counterexample`](@ref). The numerical oracles can
+only refute, never certify, so when they find no difference the result is `UNKNOWN`.
 
 Keyword arguments:
 
-- `semantics = :outcomes`: compare the joint distribution of the input's classical
-  outcomes for every input state (what PBCCompiler preserves, since it drops
-  operations after the last measurement). `:channel` also requires the
-  post-measurement quantum state to agree.
-- `outcome_map = :infer`: how input bits correspond to compiled outcomes: `:infer`
-  (any parity map, reported in the certificate), `:identity` (same bit index), or
-  an explicit `Dict` input bit ⇒ `AffineBit` over compiled bits.
-- `oracle = :auto`, `max_dense_qubits = 10`, `max_branches = 4096`,
-  `rng = Random.default_rng()`: oracle control.
-- `magic_k = 1`: magic qubits are prepared in `(|0⟩ + ζ₈^magic_k|1⟩)/√2` (1 means `T|+⟩`).
-- `n_data`: number of data qubits (default: the input's width). Qubits above it
-  are magic qubits, in either program.
-- `visible_bits`: the input bits that form the outcome record (default: every bit
-  the input writes).
-- `minimize = true`: when a counterexample is found, shrink it
-  ([`minimize_counterexample`](@ref) for the one-argument form, which can recompile;
-  [`minimize_pair`](@ref) otherwise), then re-confirm it with the dense oracle when
-  it is small enough.
+- `semantics = :outcomes`: compare the distribution of classical outcomes for every input state; `:channel` also compares the final quantum state.
+- `outcome_map = :infer`: how input bits relate to compiled outcomes: `:infer` (any parity map), `:identity` (same bit index), or a `Dict` from input bits to `AffineBit`s over compiled bits.
+- `oracle = :auto`: which fallback oracle to use: `:auto`, `:dense`, `:stabilizer` or `:none`.
+- `max_dense_qubits = 10`, `max_branches = 4096`: size limits for the dense oracle.
+- `stabilizer_trials = 20`: number of random trials for the stabilizer oracle.
+- `rng = Random.default_rng()`: random number generator used by the oracles.
+- `magic_k = 1`: magic qubits are prepared in `(|0⟩ + exp(iπ magic_k/4)|1⟩)/√2`; 1 means `T|+⟩`.
+- `n_data`: number of data qubits (default: the width of `input`); higher qubits are magic qubits.
+- `visible_bits`: the input bits to compare (default: every bit the input writes).
+- `minimize = true`: shrink a counterexample with [`minimize_counterexample`](@ref) or [`minimize_pair`](@ref) when one is found.
 """
 function verify_compilation(input::AbstractVector{CircuitOp.Type}, compiled::AbstractVector{CircuitOp.Type};
                             outcome_map = :infer, oracle::Symbol = :auto, max_dense_qubits::Int = 10,
@@ -67,8 +45,7 @@ function verify_compilation(input::AbstractVector{CircuitOp.Type}, compiled::Abs
     wf = vcat(["input: " * s for s in check_wellformed(input; n_data = n)],
               ["compiled: " * s for s in check_wellformed(compiled; n_data = n)])
 
-    # lowering and gadget lifting (the input side may contain gadgets too, e.g. an
-    # intermediate program in per-pass validation)
+    # The input may contain gadgets too, e.g. an intermediate program in verify_passes.
     lr_in = lift_gadgets(input, n; magic_k)
     prog_in = lower_lifted(input, lr_in)
     for f in lr_in.failed
@@ -150,7 +127,6 @@ function verify_compilation(input::AbstractVector{CircuitOp.Type}; outcome_map =
     verify_compilation(input, compiled; outcome_map, _compiled_by_us = true, kwargs...)
 end
 
-# The compiler under test, through its public entry point.
 _compile(input) = PBCCompiler.preprocess_circuit(copy(collect(CircuitOp.Type, input)))
 
 function Base.show(io::IO, ::MIME"text/plain", r::VerificationResult)

@@ -1,13 +1,6 @@
-# E8: magic-state factories.
-#
-# Sources:
-#  [GoSC] Litinski, "A Game of Surface Codes", Quantum 3, 128 (2019): the 15-to-1 block
-#         uses 11 tiles and outputs one state every 11 time steps (11·d code cycles),
-#         with output error 35p³ and success probability (1 − p)^n, n = 15
-#         (Secs. 3 and 4). A tile is 2d² physical qubits (Sec. 4.3).
-#  [MSD]  Litinski, "Magic State Distillation: Not as Costly as You Think", Quantum 3,
-#         205 (2019), arXiv:1905.06903, Table 1 (qubits, code cycles per state, p_out at
-#         the stated p_phys).
+# Litinski 2019: "A Game of Surface Codes", Quantum 3, 128, arXiv:1808.02892
+# Litinski 2019b: "Magic State Distillation: Not as Costly as You Think", Quantum 3, 205, arXiv:1905.06903
+# Fowler et al. 2012: "Surface codes: Towards practical large-scale quantum computation", arXiv:1208.0928
 
 """A magic-state factory model."""
 abstract type FactoryModel end
@@ -15,14 +8,12 @@ abstract type FactoryModel end
 """
     FifteenToOneFactory(; d = nothing)
 
-The 15-to-1 distillation block of [GoSC], parametrized by its code distance `d`:
-- qubits `= 11 tiles × 2d²`;
-- code cycles per output state `= 11d / (1 − p)^15` (expected, including failures);
-- output error `= 35 p³`, with `p` the hardware's physical error rate (raw magic
-  states have error ≈ p, [GoSC] Sec. 4).
-With `d = nothing`, the largest surface-code distance in the layout is used (or
-`d` must be given if the layout has none). The cycle time is that of a surface code
-on the given hardware.
+The 15-to-1 distillation block at code distance `d` (Litinski 2019, Secs. 3 and 4):
+- qubits `= 11 * 2d^2`
+- expected code cycles per output state `= 11d / (1 - p)^15`
+- output error `= 35p^3`, with `p` the hardware's physical error rate
+With `d = nothing`, the largest surface-code distance in the layout is used; `d` is
+required if the layout has no surface-code block.
 """
 Base.@kwdef struct FifteenToOneFactory <: FactoryModel
     d::Union{Nothing,Int} = nothing
@@ -31,10 +22,9 @@ end
 """
     TableFactory(name, qubits, cycles_per_state, output_error, p_phys)
 
-A factory with fixed published numbers, valid at physical error rate `p_phys`. Using
-it at another `p_phys` is recorded as a warning in the estimate. Cycles are
-surface-code cycles on the given hardware. See [`litinski_factory`](@ref) for
-presets.
+A factory with fixed qubit count, surface-code cycles per state and output error,
+valid at physical error rate `p_phys`. Using it at another `p_phys` is recorded as a
+warning in the estimate. See [`litinski_factory`](@ref) for presets.
 """
 struct TableFactory <: FactoryModel
     name::Symbol
@@ -54,9 +44,9 @@ const _MSD_TABLE1 = Dict(
 """
     litinski_factory(name) -> TableFactory
 
-Single-level 15-to-1 factories from [MSD] Table 1: `:f_7_3_3`, `:f_9_3_3`,
-`:f_11_5_5` (all at p = 10⁻⁴) and `:f_17_7_7` (at p = 10⁻³). The name gives the
-protocol's distances (d_X, d_Z, d_m).
+Single-level 15-to-1 factories (Litinski 2019b, Table 1): `:f_7_3_3`, `:f_9_3_3`,
+`:f_11_5_5` (at `p = 1e-4`) and `:f_17_7_7` (at `p = 1e-3`). The name gives the
+distances `(d_X, d_Z, d_m)`.
 """
 function litinski_factory(name::Symbol)
     haskey(_MSD_TABLE1, name) || throw(ArgumentError("unknown preset $name (have $(sort!(collect(keys(_MSD_TABLE1)))))"))
@@ -71,7 +61,7 @@ _factory_d(f::FifteenToOneFactory, layout) = f.d !== nothing ? f.d :
         maximum(ds)
     end
 
-_surface_cycle(hw) = 3hw.t_1q + 4hw.t_2q + hw.t_meas        # [Fowler] 8-step cycle (same as SurfaceCodeModel)
+_surface_cycle(hw) = 3hw.t_1q + 4hw.t_2q + hw.t_meas        # Fowler et al. 2012, as in SurfaceCodeModel
 
 """
     FactorySpec
@@ -102,8 +92,8 @@ end
 """
     magic_state_counts(compiled, n_data) -> Dict{Symbol,Int}
 
-Magic states consumed, by gadget type, as recognized by the shared
-`GadgetShapes` recognizer. Unlifted π/8 rotations are counted as `:t_rotation`.
+Number of magic states consumed by a compiled program, by gadget type. Remaining
+pi/8 rotations are counted as `:t_rotation`.
 """
 function magic_state_counts(c::AbstractVector{CircuitOp.Type}, n_data::Int)
     d = count_gadgets(c, n_data)
@@ -116,12 +106,11 @@ end
     choose_factory_count(ops, layout, hw, spec; objective = :makespan, max_factories = 64)
         -> (n_factories, schedule, table)
 
-Search the number of factories. Each candidate is scheduled, and the one minimizing
-`objective` is kept:
-- `:makespan`: shortest makespan, ties broken by fewer factories;
-- `:spacetime`: (total qubits) × makespan.
-The search stops early once magic states no longer cause any waiting. `table` lists
-`(n, makespan, objective value)` for every candidate tried.
+Choose the number of factories that minimizes `objective`:
+- `:makespan`: shortest run time, preferring fewer factories on ties
+- `:spacetime`: total qubits times run time
+Returns the chosen count, its [`ScheduleResult`](@ref), and a table of
+`(n, makespan, objective value)` for every count tried.
 """
 function choose_factory_count(ops::Vector{EstOp}, layout::LogicalLayout, hw::HardwareModel, spec::FactorySpec;
                               objective::Symbol = :makespan, max_factories::Int = 64, base_qubits::Int = 0)

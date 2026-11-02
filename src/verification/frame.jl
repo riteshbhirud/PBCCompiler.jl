@@ -1,27 +1,12 @@
-# V2: symbolic Pauli frame.
-#
-# A Pauli operator whose X and Z bits on each qubit are affine functions (over F2)
-# of the measurement-outcome variables. It represents all 2^m outcome branches at
-# once.
-#
-# The frame is tracked up to an outcome-dependent global phase. That phase is
-# unobservable within a branch, and is in general not affine in the outcomes: the
-# sign of a conjugated frame can be quadratic, e.g. S maps X→Y and Y→−X. The
-# observable consequences of the frame (sign flips of later measurements and
-# rotations) are commutation parities, which are affine; see
-# `commutation_parity`.
-
 """
     SymbolicPauli(n::Int)
 
 An `n`-qubit Pauli operator whose X and Z bits are [`AffineBit`](@ref)s, i.e.
-affine functions over F2 of measurement-outcome variables. Constructed as the
-identity. It is tracked up to a global phase per outcome branch.
+affine functions over F2 of measurement-outcome variables. Starts as the
+identity, and is tracked up to a global phase in each outcome branch.
 
-Operations: [`mul_conditional!`](@ref) (multiply by `Q^c` for an affine
-condition `c`), [`conjugate!`](@ref) (conjugate by a Clifford),
-[`commutation_parity`](@ref), [`evaluate`](@ref), and `==` (equality as
-functions of the outcomes).
+See [`mul_conditional!`](@ref), [`conjugate!`](@ref), [`commutation_parity`](@ref)
+and [`evaluate`](@ref).
 """
 struct SymbolicPauli
     x::Vector{AffineBit}
@@ -41,9 +26,8 @@ Base.isone(f::SymbolicPauli) = all(iszero, f.x) && all(iszero, f.z)
 """
     mul_conditional!(f::SymbolicPauli, q::PauliOperator, c::AffineBit) -> f
 
-Multiply the frame by `q^c`: apply `q` in exactly the branches where `c` evaluates
-to 1. The phase of `q` is ignored, since the frame is tracked up to a global
-phase.
+Multiply the frame by `q^c`, i.e. apply `q` in the branches where `c` evaluates
+to 1. The phase of `q` is ignored.
 """
 function mul_conditional!(f::SymbolicPauli, q::PauliOperator, c::AffineBit)
     nqubits(q) == length(f.x) || throw(DimensionMismatch("frame has $(length(f.x)) qubits, Pauli has $(nqubits(q))"))
@@ -75,8 +59,8 @@ end
 """
     commutation_parity(f::SymbolicPauli, p::PauliOperator) -> AffineBit
 
-The affine function that is 1 exactly in the branches where the frame
-anticommutes with `p`, i.e. the symplectic product of the frame's bits with `p`.
+The affine function that is 1 in the branches where the frame anticommutes
+with `p`.
 """
 function commutation_parity(f::SymbolicPauli, p::PauliOperator)
     nqubits(p) == length(f.x) || throw(DimensionMismatch("frame has $(length(f.x)) qubits, Pauli has $(nqubits(p))"))
@@ -95,8 +79,7 @@ end
 
 Replace the frame `F` by `C F C†` for the (unconditional) Clifford `C`, given
 either as a `CliffordOperator` or as the vector of images `[C X₁ C†, …, C Xₙ C†,
-C Z₁ C†, …, C Zₙ C†]`. The images' bits enter linearly, so the result stays affine
-in the outcomes.
+C Z₁ C†, …, C Zₙ C†]`.
 """
 function conjugate!(f::SymbolicPauli, images::AbstractVector{<:PauliOperator})
     n = length(f.x)

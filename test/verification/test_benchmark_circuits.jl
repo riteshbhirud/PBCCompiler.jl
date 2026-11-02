@@ -15,7 +15,7 @@ function perm_unitary(n, f)
 end
 bit(x, j) = (x >> (j - 1)) & 1
 
-# CNOT in both orientations (the reversed one goes through the Hadamard identity)
+# CNOT in both orientations
 for (c, t) in ((1, 2), (2, 1), (3, 1))
     U = perm_unitary(3, x -> bit(x, c) == 1 ? x ⊻ (1 << (t - 1)) : x)
     @test phase_equal(dense_unitary(bm_cnot(c, t), 3), U)
@@ -29,7 +29,7 @@ for (a, b, c) in ((1, 2, 3), (3, 1, 2))
     U = perm_unitary(3, x -> (bit(x, a) & bit(x, b)) == 1 ? x ⊻ (1 << (c - 1)) : x)
     @test phase_equal(dense_unitary(bm_toffoli(a, b, c), 3), U)
 end
-# the Cuccaro adder adds: b ← a + b (+ cin), with the carry in cout
+# Cuccaro adder: b = a + b + cin, carry in cout
 for k in 1:2
     c = filter(op -> PBCCompiler.Verification._opkind(op) != PBCCompiler.Verification.OP_MEASUREMENT, cuccaro_adder(k))
     n = 2k + 2
@@ -49,7 +49,7 @@ for k in 1:2
     end
     @test ok
 end
-# the approximate QFT-2 matches H, CS, H (the exact QFT-2 up to the final swap)
+# approximate QFT-2 is H, CS, H (exact QFT-2 without the final swap)
 H = [1 1; 1 -1] / sqrt(2)
 qft2 = kron(H, I(2)) * Matrix(CS) * kron(I(2), H)       # qubit 2 is the most significant factor
 c = filter(op -> PBCCompiler.Verification._opkind(op) != PBCCompiler.Verification.OP_MEASUREMENT, approx_qft(2))

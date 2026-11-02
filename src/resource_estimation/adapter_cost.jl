@@ -1,5 +1,3 @@
-# E4: adapter (cross-block joint measurement) cost models.
-
 """Cost model for a Pauli measurement spanning several code blocks."""
 abstract type AdapterCostModel end
 
@@ -7,29 +5,20 @@ abstract type AdapterCostModel end
     AnalyticAdapterModel(; cycle_time_factor, aux_qubits_per_block = aux_graph_qubits,
                            adapter_qubits_per_join = d -> 2d - 1, rounds = d -> d)
 
-Closed-form cost of a joint measurement touching blocks `B₁ … B_a` with per-block
-logical weights `wᵢ`:
+Closed-form cost of a joint measurement on blocks `B_1, ..., B_a` with per-block
+logical weights `w_i`:
 
-- `d_joint = minᵢ d(Bᵢ)`;
-- ancilla qubits `= Σᵢ aux_qubits_per_block(Bᵢ, wᵢ) + (a − 1)·adapter_qubits_per_join(d_joint)`;
-- rounds `= rounds(d_joint)`;
-- time per round `= cycle_time_factor · maxᵢ cycle_time(Bᵢ)`.
+- `d_joint = min_i d(B_i)`
+- ancilla `= sum_i aux_qubits_per_block(B_i, w_i) + (a - 1) * adapter_qubits_per_join(d_joint)`
+- rounds `= rounds(d_joint)`
+- seconds per round `= cycle_time_factor * max_i cycle_time(B_i)`
 
-Fields and the source of each default:
+Keyword arguments:
 
-- `aux_qubits_per_block`: the auxiliary-graph (or lattice-surgery routing) qubits each
-  block needs. The default delegates to the block's own `aux_graph_qubits`, which
-  is a required argument for qLDPC models and one routing tile for surface codes.
-- `adapter_qubits_per_join`: default `2d − 1`. Swaroop, Jochym-O'Connor, Yoder,
-  arXiv:2410.03628: an adapter of width `w = d` uses `w` qubits and `w − 1` checks
-  (Table III: "27 (for adapter)" at `w = 14`). The spec suggested `3d`; the sourced
-  value is used instead.
-- `rounds`: default `d`. Lattice surgery and auxiliary-graph surgery need `O(d)`
-  rounds to handle measurement errors (Litinski, GoSC, Sec. 2; arXiv:2410.03628
-  Sec. I).
-- `cycle_time_factor`: **required**. Merged codes have higher-weight checks (up to
-  8 vs 6 in arXiv:2410.03628 Table III), so their syndrome cycle is longer, but no
-  published value converts that into time.
+- `cycle_time_factor`: required, since no published value gives the slowdown of the merged code's syndrome cycle.
+- `aux_qubits_per_block`: per-block auxiliary qubits; defaults to the block's `aux_graph_qubits`.
+- `adapter_qubits_per_join`: default `2d - 1` (arXiv:2410.03628, Table III).
+- `rounds`: default `d` (Litinski 2019, Sec. 2; arXiv:2410.03628, Sec. I).
 """
 struct AnalyticAdapterModel{F1,F2,F3} <: AdapterCostModel
     aux_qubits_per_block::F1
@@ -48,9 +37,9 @@ end
     AdapterCost
 
 Cost of one cross-block joint measurement: ancilla qubits, rounds, seconds per
-round, the joint distance, a `source` (`:analytic` or `:constructed`), an optional
-note (for example a recorded fallback), and `alt_ancilla`, the other model's
-ancilla count for cross-checking (−1 if not computed).
+round, the joint distance, a `source` (`:analytic` or `:constructed`), a note
+(for example a recorded fallback), and `alt_ancilla`, the analytic model's
+ancilla count for comparison (-1 if not computed).
 """
 struct AdapterCost
     ancilla::Int
@@ -77,42 +66,27 @@ function adapter_cost(am::AnalyticAdapterModel, blocks::AbstractVector{<:CodeMod
     AdapterCost(anc, Int(am.rounds(dj)), am.cycle_time_factor * maximum(b -> cycle_time(b, hw), blocks), dj, :analytic, "", -1)
 end
 
-# ---------------------------------------------------------------- E5: constructed adapters
-
 """
     adapters_available() -> Bool
 
-Whether the loaded QuantumClifford provides the universal-adapter construction
-(`QuantumClifford.ECC.build_adapter`, from the `riteshbhirud/QuantumClifford.jl`
-fork, PR #742).
+Whether the loaded QuantumClifford provides `QuantumClifford.ECC.build_adapter`
+(currently only in the `riteshbhirud/QuantumClifford.jl` fork, PR #742).
 """
 adapters_available() = isdefined(QuantumClifford.ECC, :build_adapter)
 
 """
     ConstructedAdapterModel(; cycle_time_factor, fallback = AnalyticAdapterModel(; cycle_time_factor))
 
-Exact adapter costs from the universal-adapter construction of Swaroop,
-Jochym-O'Connor and Yoder (arXiv:2410.03628), as implemented by
-`QuantumClifford.ECC.build_adapter` (fork `riteshbhirud/QuantumClifford.jl`,
-`master`, PR #742).
+Adapter costs from an explicit construction of the merged code with the universal
+adapters of Swaroop, Jochym-O'Connor and Yoder (arXiv:2410.03628), via
+`QuantumClifford.ECC.build_adapter`.
 
-For a measurement on exactly two blocks, whose part on each block is a single X- or
-Z-type logical, the merged code is built from the blocks' codes and the logical
-representatives `logz_ops(code)[i]` (or `logx_ops(code)[i]` for X, used as a Z-type
-logical of the code with its X and Z checks swapped), where `i` is the logical index from the layout. The costs are read
-off the construction:
-- ancilla = new qubits + new checks (one syndrome ancilla per check);
-- rounds = `d_joint`;
-- round time = `cycle_time_factor` × the slowest block's cycle.
-The merged code's maximum check weights are recorded in the note, and the analytic
-model's ancilla count is kept alongside for cross-checking. Constructions are
-cached per (block code, logical index, letter) pair.
-
-Anything else (more than two blocks, Y-type parts, several logicals of one block,
-the fork not loaded, or a construction that throws, for example because the fork's
-inter-code construction needs logical supports of equal length) uses `fallback`, and the fallback is **recorded** in the
-estimate's notes. The merged-code distance is not computed (an ILP); `d_joint` is
-reported as a bound.
+Applies to measurements on exactly two blocks whose part on each block is a single
+X- or Z-type logical. The ancilla count is the number of new qubits plus new checks,
+rounds are `d_joint`, and seconds per round are `cycle_time_factor` times the slowest
+block's cycle. The note records the merged code's maximum check weights. All other
+measurements, or a failed construction, use `fallback`, and the fallback is recorded
+in the estimate's notes. `d_joint` is a bound; the merged-code distance is not computed.
 """
 struct ConstructedAdapterModel <: AdapterCostModel
     cycle_time_factor::Float64
@@ -125,7 +99,11 @@ function ConstructedAdapterModel(; cycle_time_factor::Real, fallback::Union{Noth
     ConstructedAdapterModel(Float64(cycle_time_factor), fb, Dict{Any,Tuple{Int,Int,String}}())
 end
 
-"""The block's code as a QuantumClifford CSS code."""
+"""
+    block_code(m::CodeModel)
+
+The block's code as a QuantumClifford CSS code.
+"""
 block_code(m::GenericCSSModel) = m.code
 function block_code(m::CodeModel)
     Hx, Hz = parity_check_matrices(m)
@@ -149,7 +127,7 @@ function adapter_cost(cm::ConstructedAdapterModel, blocks::AbstractVector{<:Code
         ""
     end
     if isempty(reason)
-        parts = Tuple{Int,Char}[]          # (logical index, letter) per block
+        parts = Tuple{Int,Char}[]
         for b in sort!(unique([layout.qubit_to_block[q] for q in qubits if q <= n_data]))
             q = only(qq for qq in qubits if qq <= n_data && layout.qubit_to_block[qq] == b)
             x, z = pauli[q]
@@ -166,7 +144,7 @@ function adapter_cost(cm::ConstructedAdapterModel, blocks::AbstractVector{<:Code
             _construct_adapter(blocks, parts)
         catch err
             err isa InterruptException && rethrow()
-            (-1, -1, sprint(showerror, err))          # cached failure: never retried
+            (-1, -1, sprint(showerror, err))
         end
     end
     if anc < 0
@@ -184,8 +162,7 @@ function _construct_adapter(blocks, parts)
     for ((idx, letter), m) in zip(parts, blocks)
         code = block_code(m)
         if letter == 'X'
-            # logical i's X representative (paired with logz_ops[i]), as a Z-type operator
-            # of the Hadamard-conjugated code (X and Z checks swapped)
+            # treat the X logical as a Z logical of the code with X and Z checks swapped
             p = getfield(ECC, :logx_ops)(code)[idx]
             push!(supports, [j for j in 1:(nqubits(p)::Int) if p[j][1]])
             code = ECC.CSS(Matrix{Bool}(ECC.parity_matrix_z(code)), Matrix{Bool}(ECC.parity_matrix_x(code)))

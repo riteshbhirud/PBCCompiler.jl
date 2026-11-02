@@ -1,23 +1,16 @@
-# E2: QEC code models.
-#
-# Sources for every default below:
-#  [GoSC]   D. Litinski, "A Game of Surface Codes", Quantum 3, 128 (2019), arXiv:1808.02892.
-#  [Fowler] A. G. Fowler et al., "Surface codes: Towards practical large-scale quantum
-#           computation", PRA 86, 032324 (2012), arXiv:1208.0928.
-#  [BB]     S. Bravyi et al., "High-threshold and low-overhead fault-tolerant quantum
-#           memory", Nature 627, 778 (2024), arXiv:2308.07915.
-#  [Adapt]  E. Swaroop, T. Jochym-O'Connor, T. J. Yoder, "Universal adapters between
-#           quantum LDPC codes", arXiv:2410.03628.
-# Anything without a source is a required argument.
+# Litinski 2019: "A Game of Surface Codes", Quantum 3, 128, arXiv:1808.02892
+# Fowler et al. 2012: "Surface codes: Towards practical large-scale quantum computation", arXiv:1208.0928
+# Bravyi et al. 2024: "High-threshold and low-overhead fault-tolerant quantum memory", arXiv:2308.07915
+# Swaroop et al. 2024: "Universal adapters between quantum LDPC codes", arXiv:2410.03628
 
 """
     HardwareModel(connectivity; t_1q, t_2q, t_meas, t_reaction, p_phys)
 
 Physical hardware: a connectivity (`:all_to_all`, `:grid`, `:heavy_hex`, or a
-`Graphs.SimpleGraph`), gate/measurement times in seconds, the classical
-decode-and-feed-forward latency `t_reaction` (seconds), and the physical error
-rate `p_phys` used by the logical-error models. All times and rates are required:
-they are hardware properties and have no source-backed defaults.
+`Graphs.SimpleGraph`), gate and measurement times in seconds, the classical
+decode-and-feed-forward latency `t_reaction` in seconds, and the physical error
+rate `p_phys`. All times and rates are required, as they are hardware properties
+with no published defaults.
 """
 struct HardwareModel
     connectivity::Union{Symbol,Graphs.SimpleGraph{Int}}
@@ -36,16 +29,14 @@ function HardwareModel(connectivity = :all_to_all; t_1q::Real, t_2q::Real, t_mea
     HardwareModel(connectivity, t_1q, t_2q, t_meas, t_reaction, p_phys)
 end
 
-# ---------------------------------------------------------------- logical error models
-
 """Logical error rate per code cycle as a function of physical error rate and distance."""
 abstract type PLModel end
 
 """
     AnalyticPL(; A = 0.1, p_th = 0.01)
 
-`p_L(p, d) = A·(p/p_th)^((d+1)/2)` per code cycle. The defaults are [GoSC] Eq. (10),
-`p_L = 0.1(100p)^((d+1)/2)` for circuit-level noise in the surface code.
+Logical error rate `p_L(p, d) = A * (p/p_th)^((d+1)/2)` per code cycle. The defaults
+give the surface-code estimate `0.1 * (100p)^((d+1)/2)` (Litinski 2019, Eq. 10).
 """
 Base.@kwdef struct AnalyticPL <: PLModel
     A::Float64 = 0.1
@@ -66,9 +57,9 @@ pl(m::FitPL, p::Real, d::Int) = Float64(m.f(p, d))
 """
     BBFitPL(d_circ, c0, c1, c2)
 
-The bivariate-bicycle fitting formula of [BB] (Sec. 8, Table 6),
-`p_L(p) = p^(d_circ/2)·exp(c0 + c1·p + c2·p²)` per syndrome cycle. The distance
-argument is ignored (the fit is for one specific code).
+Bivariate-bicycle fit `p_L(p) = p^(d_circ/2) * exp(c0 + c1*p + c2*p^2)` per syndrome
+cycle (Bravyi et al. 2024, Sec. 8, Table 6). The fit is for one specific code, so
+the distance is ignored.
 """
 struct BBFitPL <: PLModel
     d_circ::Int
@@ -83,13 +74,13 @@ pl(m::BBFitPL, p::Real, d::Int) = p^(m.d_circ / 2) * exp(m.c0 + m.c1 * p + m.c2 
     TablePL(csvpath; code)
 
 Logical error rates from the user's own threshold simulations: rows of
-`(code, d, p, p_L, ci_low, ci_high)` (a CSV with exactly these columns and a header),
-interpolated linearly in log(p)–log(p_L) at fixed `d`. Querying a `d` that is not
-in the table, or a `p` outside the tabulated range, throws.
+`(code, d, p, p_L, ci_low, ci_high)`, or a CSV file with exactly these columns and a
+header. Values are interpolated in log-log scale at fixed `d`. Querying a `d` not in
+the table, or a `p` outside the tabulated range, throws.
 """
 struct TablePL <: PLModel
     code::String
-    points::Dict{Int,Vector{Tuple{Float64,Float64}}}   # d => sorted (p, p_L)
+    points::Dict{Int,Vector{Tuple{Float64,Float64}}}
 end
 
 function TablePL(rows::AbstractVector; code::AbstractString)
@@ -127,41 +118,32 @@ function pl(m::TablePL, p::Real, d::Int)
     exp(log(y1) + t * (log(y2) - log(y1)))
 end
 
-# ---------------------------------------------------------------- code models
-
 """
     CodeModel
 
-A QEC code block. Interface (implemented by every concrete model):
-`code_n`, `code_k`, `code_d`, `syndrome_ancillas`, `cycle_time(m, hw)`,
-`logical_error_per_cycle(m, p)`, `intra_measurement_cost(m, support)`,
-`max_parallel_surgeries(m)`, `aux_graph_qubits(m, weight)`, `tanner_graph(m)`,
-plus `distance_family(m)` and `with_distance(m, d)` for distance optimization.
-
-The spec's `n`, `k`, `d` are named `code_n`, `code_k`, `code_d` here (the QECCore
-convention), to avoid exporting one-letter names.
+A QEC code block. Every model supports `code_n`, `code_k`, `code_d`,
+`syndrome_ancillas`, `cycle_time(m, hw)`, `logical_error_per_cycle(m, p)`,
+`intra_measurement_cost(m, support)`, `max_parallel_surgeries(m)`,
+`aux_graph_qubits(m, weight)` and `tanner_graph(m)`.
 """
 abstract type CodeModel end
 
 max_parallel_surgeries(::CodeModel) = 1
 logical_error_per_cycle(m::CodeModel, p::Real) = pl(m.pl, p, code_d(m))
-distance_family(::CodeModel) = nothing        # not optimizable unless a model says so
+distance_family(::CodeModel) = nothing
 
 """
     SurfaceCodeModel(d; pl = AnalyticPL(), ancilla_tiles_per_qubit = 1.0, max_parallel = 1)
 
-Rotated surface code patch, `[[d², 1, d]]` with `d² − 1` syndrome qubits (one per
-stabilizer), so a tile is `2d² − 1` physical qubits.
+Rotated surface code patch `[[d^2, 1, d]]` with `d^2 - 1` syndrome qubits, so one
+tile is `2d^2 - 1` physical qubits.
 
-- Cycle: [Fowler] Fig. 1, eight steps: initialization, Hadamard, four CNOTs,
-  Hadamard, measurement, so `cycle_time = 3·t_1q + 4·t_2q + t_meas`.
-- `pl`: [GoSC] Eq. (10).
-- Pauli product measurements take `d` code cycles of lattice surgery ([GoSC] Sec. 2:
-  "d code cycles to account for measurement errors").
-- `ancilla_tiles_per_qubit`: lattice-surgery routing tiles per logical qubit in the
-  measured product. Default 1, a **modelling assumption**: one adjacent routing
-  tile per patch, as in [GoSC]'s data-block layouts (the compact block uses 1.53
-  tiles per stored qubit including its routing region). Set it for your layout.
+- Cycle time `3*t_1q + 4*t_2q + t_meas` (Fowler et al. 2012, Fig. 1).
+- `pl`: default from Litinski 2019, Eq. 10.
+- Pauli product measurements take `d` code cycles (Litinski 2019, Sec. 2).
+- `ancilla_tiles_per_qubit`: routing tiles per logical qubit in a measured product.
+  The default of 1 assumes one adjacent routing tile per patch, as in the data-block
+  layouts of Litinski 2019; set it for your layout.
 """
 struct SurfaceCodeModel <: CodeModel
     d::Int
@@ -194,21 +176,18 @@ min_distance(::SurfaceCodeModel) = 3
 """
     BBCodeModel(name; intra_ancilla, intra_rounds, aux_graph_qubits, pl = preset fit, max_parallel = 1)
 
-Bivariate bicycle code presets from [BB] Table 3:
-- `:gross`: `[[144, 12, 12]]`, l = 12, m = 6, A = x³ + y + y², B = y³ + x + x²
-- `:two_gross`: `[[288, 12, 18]]`, l = 12, m = 12, A = x³ + y² + y⁷, B = y³ + x + x²
+Bivariate bicycle code presets (Bravyi et al. 2024, Table 3):
+- `:gross`: `[[144, 12, 12]]`
+- `:two_gross`: `[[288, 12, 18]]`
 
-From [BB]: `n` check qubits (2n physical qubits in total); a syndrome cycle with 7
-CNOT layers plus initialization and measurement (`cycle_time = 7·t_2q + t_1q +
-t_meas`, Sec. 5); and the `p_L` fit of Sec. 8 / Table 6 with `d_circ` the Table 1
-upper bound (10 and 18).
+Each block has `n` check qubits, cycle time `7*t_2q + t_1q + t_meas` (Bravyi et al.
+2024, Sec. 5) and, by default, the `p_L` fit of Sec. 8 and Table 6.
 
-Required (no published source for a generic value): `intra_ancilla` and
-`intra_rounds`, the ancilla qubits and rounds of an in-block logical measurement
-(for example from an auxiliary-graph construction), and `aux_graph_qubits`, a
-function `weight -> qubits` for the auxiliary graph used when this block takes part
-in an adapter join ([Adapt] Table II gives 35–47 qubits for weight 12–14 logicals
-of a [[98,6,12]] code).
+Required, since no published generic value exists: `intra_ancilla` and `intra_rounds`,
+the ancilla qubits and rounds of an in-block logical measurement, and
+`aux_graph_qubits`, a function `weight -> qubits` for the auxiliary graph used in an
+adapter join (arXiv:2410.03628, Table II gives 35 to 47 qubits for weights 12 to 14
+on a `[[98,6,12]]` code).
 """
 struct BBCodeModel <: CodeModel
     name::Symbol
@@ -217,7 +196,7 @@ struct BBCodeModel <: CodeModel
     d::Int
     l::Int
     m::Int
-    A::NTuple{3,Tuple{Int,Int}}       # monomials (x-power, y-power)
+    A::NTuple{3,Tuple{Int,Int}}       # monomials (x power, y power)
     B::NTuple{3,Tuple{Int,Int}}
     pl::PLModel
     intra_ancilla::Int
@@ -264,15 +243,14 @@ min_distance(::BBCodeModel) = 12
     GenericCSSModel(code; d = nothing, compute_distance = false, pl, cycle_layers,
                     intra_ancilla, intra_rounds, aux_graph_qubits, syndrome_ancillas = nothing)
 
-Wraps any QuantumClifford stabilizer code. `n` and `k` are read from the code, and
-`syndrome_ancillas` defaults to the number of checks (one ancilla per check). `d`
-must be given, unless `compute_distance = true`, which calls QuantumClifford's
-`distance` (this may need its optional solver extensions). Required:
-- the error model `pl`;
-- `cycle_layers = (n_1q, n_2q, n_meas)`, the depth of one syndrome cycle in each
-  kind of layer;
-- the in-block measurement cost (`intra_ancilla`, `intra_rounds`);
-- `aux_graph_qubits(weight)`.
+Wraps any QuantumClifford stabilizer code. `n` and `k` are read from the code and
+`syndrome_ancillas` defaults to the number of checks. Give `d`, or set
+`compute_distance = true` to compute it with QuantumClifford's `distance`.
+Required:
+- `pl`: the logical error model
+- `cycle_layers = (n_1q, n_2q, n_meas)`: layers of each kind in one syndrome cycle
+- `intra_ancilla`, `intra_rounds`: cost of an in-block logical measurement
+- `aux_graph_qubits`: a function `weight -> qubits`
 """
 struct GenericCSSModel{C} <: CodeModel
     code::C

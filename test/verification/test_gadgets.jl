@@ -109,18 +109,17 @@ lr = lift_one(c); @test isempty(lr.lifted) && occursin("different rotations", re
 # correction about a different Pauli
 c = copy(good); c[3] = C.BitConditional(C.ExpQuatPiPauli(P"X", [1]), 2)
 lr = lift_one(c); @test isempty(lr.lifted) && occursin("not ±", reason(lr))
-# wrong magic state |+⟩ (k = 0): the bare gadget only applies Z^{b2}, so after the
-# π/4 correction the branches implement different rotations
+# wrong magic state |+⟩ (k = 0)
 lr = lift_one(good; magic_k=0); @test isempty(lr.lifted) && occursin("different rotations", reason(lr))
-# wrong magic state S|+⟩ (k = 2): a valid gadget, but for a different (Clifford) angle
+# wrong magic state S|+⟩ (k = 2): valid gadget for a Clifford angle
 lr = lift_one(good; magic_k=2); @test isempty(lr.lifted) || lr.lifted[1].angle != 1 // 8
-# magic qubit measured in Z instead of X: the shape is not recognized at all
+# magic qubit measured in Z instead of X: not recognized
 c = copy(good); c[2] = C.Measurement(P"Z", 3, [2])
 lr = lift_one(c); @test isempty(lr.lifted) && isempty(lr.failed)
-# missing π/2 correction: lifts, but leaves the residual Pauli frame P^{b2}
+# missing π/2 correction: lifts with residual frame P^{b2}
 c = deleteat!(copy(good), 4)
 lr = lift_one(c); @test length(lr.lifted) == 1 && lr.lifted[1].residual.vars == [2]
-# π/4 correction with the opposite sign: equivalent up to the Pauli frame P^{b1}
+# π/4 correction with the opposite sign: residual frame P^{b1}
 c = copy(good); c[3] = C.BitConditional(C.ExpQuatPiPauli(P"-Z", [1]), 2)
 lr = lift_one(c); @test length(lr.lifted) == 1 && lr.lifted[1].angle == 1 // 8 && lr.lifted[1].residual.vars == [1]
 end
@@ -133,7 +132,7 @@ L = Dict('X' => ComplexF64[0 1; 1 0], 'Y' => ComplexF64[0 -im; im 0], 'Z' => Com
 I2 = Matrix{ComplexF64}(I, 2, 2)
 eig(l, b) = (v = eigen(Hermitian(L[l])); v.vectors[:, findfirst(x -> isapprox(x, b ? -1 : 1), v.values)])
 rot(θ) = cispi(-θ) * [1 0; 0 0] + cispi(θ) * [0 0; 0 1]        # exp(-iπθZ)
-# float data Kraus operator of branch (b1, b2); index = d + 2m, i.e. kron(magic, data)
+# Kraus operator of branch (b1, b2), ordered kron(magic, data)
 function kraus(jl, ml, ms, corr, k, b1, b2)
     J = kron(L[jl], L['Z']); T = kron(ms ? -L[ml] : L[ml], I2)
     m = ComplexF64[1, cispi(k / 4)] / sqrt(2)
@@ -165,7 +164,7 @@ for jl in "XYZ", ml in "XYZ", ms in (false, true), k in 0:7
         @test sum(K' * K for K in Ks) ≈ I                   # trace preserving
     else
         nfail[] += 1
-        # some branch is not a common rotation up to Z: there is no θ ∈ π/8·Z that works
+        # no θ ∈ π/8·Z works for all branches
         works = any(0:15) do j
             θ = j // 16
             all(norm(K) < 1e-12 || proportional(K, rot(θ)) || proportional(K, L['Z'] * rot(θ)) for K in Ks)

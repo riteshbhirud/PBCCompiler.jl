@@ -1,23 +1,10 @@
-# V5: equivalence decision between two canonical forms.
-#
-# Walk both canonical item lists in parallel, building the outcome map as we go.
-# Input outcome variables are translated into affine functions of the compiled
-# outcome variables:
-#
-# * rotations: equal Pauli, angle and condition; translated input sign == compiled sign;
-# * measurements: equal Pauli. If the input measures (−1)^{s_in}P with raw outcome r_in
-#   and the compiled program measures (−1)^{s_out}P with raw outcome r_out, on the
-#   same state, then r_in = r_out ⊕ s_in ⊕ s_out. That defines the input variable.
-#
-# Sound: equality item by item (plus equal frames for the channel semantics)
-# implies that the two programs are equivalent under the constructed outcome map.
-
 """
     ComparisonResult
 
-Outcome of [`compare_forms`](@ref): whether the forms match, the reason and first
-diverging canonical position when they do not, and the outcome map (input bit ⇒
-affine function of compiled outcome variables) when they do.
+Result of [`compare_forms`](@ref). `equal` says whether the forms match. When
+they do not, `reason` explains why and `position` is the first differing item
+(0 if the difference is not tied to an item). When they do, `outcome_map` maps
+each input bit to an affine function of the compiled outcome variables.
 """
 struct ComparisonResult
     equal::Bool
@@ -31,20 +18,18 @@ _mismatch(reason, k) = ComparisonResult(false, reason, k, Dict{Int,AffineBit}())
 """
     compare_forms(a::CanonicalForm, b::CanonicalForm; outcome_map = :infer) -> ComparisonResult
 
-Decide whether the canonical forms `a` (input) and `b` (compiled) describe
-equivalent programs, inferring or checking the outcome map.
+Check whether the canonical forms `a` (input) and `b` (compiled) describe
+equivalent programs.
 
-- `outcome_map = :infer`: any affine (parity) map is accepted and returned.
-- `:identity`: each input bit must equal the compiled program's final value of the
-  same bit.
-- an explicit `Dict{Int,AffineBit}`: input bit ⇒ parity of *compiled bits* (the
-  variables of the `AffineBit` are compiled bit indices, read at their final
-  write). This map is checked.
+- `outcome_map = :infer`: accept any affine (parity) map between outcomes and return it.
+- `:identity`: each input bit must equal the compiled program's final value of the same bit.
+- a `Dict{Int,AffineBit}`: maps each input bit to a parity of compiled bits (read at their final write); this map is checked.
 
-`visible_bits` restricts the outcome record to those input bits (default: every bit
-the input writes). Other input outcomes are hidden.
+`visible_bits` restricts the comparison to those input bits (default: every bit
+the input writes).
 
-Sound but incomplete: a mismatch means "not proved equal", never "proved different".
+A mismatch means the forms could not be proved equal, not that the programs are
+different.
 """
 function compare_forms(a::CanonicalForm, b::CanonicalForm; outcome_map = :infer,
                        visible_bits::Union{Nothing,AbstractVector{Int}} = nothing)
@@ -101,7 +86,6 @@ function compare_forms(a::CanonicalForm, b::CanonicalForm; outcome_map = :infer,
     ComparisonResult(true, "", 0, omap)
 end
 
-# Convert an expression over compiled *bits* (final writes) into compiled variables.
 function _bits_to_vars(e, nf::NormalForm)
     e isa Integer && (e = affine_var(e))
     e isa AffineBit || throw(ArgumentError("outcome map values must be Int or AffineBit"))

@@ -1,10 +1,8 @@
-# E6: hardware connectivity and embedding overhead.
-
 """
     ResourceEstimation.grid(rows, cols) -> Graphs.SimpleGraph
 
-Square-lattice connectivity (not exported, because Graphs.jl exports a `grid` of its own): node `(r, c)` (row-major, 1-based) is coupled to its
-horizontal and vertical neighbours.
+Square-lattice connectivity with node `(r, c)` at index `(r - 1) * cols + c`, coupled
+to its horizontal and vertical neighbours. Not exported, to avoid clashing with `Graphs.grid`.
 """
 function grid(rows::Int, cols::Int)
     g = Graphs.SimpleGraph(rows * cols)
@@ -19,9 +17,8 @@ end
 """
     heavy_hex(n) -> Graphs.SimpleGraph
 
-Heavy-hexagon connectivity (as in IBM devices): take an `n × n` patch of the
-hexagonal (honeycomb) lattice, built as a brick wall of `n` rows and `2n + 2`
-columns, and put an extra qubit on every edge. Every node then has degree ≤ 3.
+Heavy-hexagon connectivity, as on IBM devices: an `n`-by-`n` patch of the hexagonal
+lattice with an extra qubit on every edge. Every node has degree at most 3.
 """
 function heavy_hex(n::Int)
     n >= 1 || throw(ArgumentError("n must be ≥ 1"))
@@ -30,19 +27,17 @@ function heavy_hex(n::Int)
     edges = Tuple{Int,Int}[]
     for r in 1:rows, c in 1:cols
         c < cols && push!(edges, (id(r, c), id(r, c + 1)))
-        # brick-wall verticals: alternate columns, offset by row parity (honeycomb)
         r < rows && iseven(c + r) && push!(edges, (id(r, c), id(r + 1, c)))
     end
     nv = rows * cols
     g = Graphs.SimpleGraph(nv + length(edges))
     for (k, (a, b)) in enumerate(edges)
-        m = nv + k                             # the "heavy" qubit on this edge
+        m = nv + k
         Graphs.add_edge!(g, a, m); Graphs.add_edge!(g, m, b)
     end
     g
 end
 
-"""Hardware graph for a connectivity symbol, sized to hold at least `nodes` qubits."""
 function hardware_graph(conn, nodes::Int)
     conn isa Graphs.SimpleGraph && return conn
     if conn == :grid
@@ -61,8 +56,8 @@ end
 """
     tanner_graph(m::CodeModel) -> Graphs.SimpleGraph
 
-Data qubits are nodes `1:n`, checks are nodes `n+1:n+s`, and each check is joined
-to the data qubits it acts on.
+The code's Tanner graph: data qubits are nodes `1:n`, checks are nodes `n+1:n+s`,
+and each check is joined to the data qubits it acts on.
 """
 function tanner_graph(m::CodeModel)
     Hx, Hz = parity_check_matrices(m)
@@ -104,10 +99,8 @@ end
     embed_tanner_graph(code_graph, hw_graph; iterations = 20_000, rng, temperature = 2.0) -> EmbeddingResult
 
 Place the Tanner graph injectively on hardware nodes, minimizing the total
-shortest-path length of its edges by simulated annealing. The initial placement
-maps both graphs in breadth-first order. Moves swap the hardware positions of two
-Tanner nodes, or move one onto a free node. The temperature decays geometrically
-to 1% of its start. Deterministic for a given `rng` seed and iteration count.
+shortest-path length of its edges by simulated annealing. The result is
+deterministic for a given `rng` seed and iteration count.
 """
 function embed_tanner_graph(G::Graphs.SimpleGraph, hw::Graphs.SimpleGraph; iterations::Int = 20_000,
                             rng::AbstractRNG = Random.MersenneTwister(0), temperature::Float64 = 2.0)
@@ -115,7 +108,6 @@ function embed_tanner_graph(G::Graphs.SimpleGraph, hw::Graphs.SimpleGraph; itera
     V <= H || throw(ArgumentError("hardware has $H qubits, the code needs $V"))
     D = _all_pairs_distances(hw)
     any(==(typemax(Int)), D) && throw(ArgumentError("hardware graph is disconnected"))
-    # breadth-first order of the code graph (every component)
     seen = falses(V); oc = Int[]
     for s in 1:V
         seen[s] && continue
@@ -147,8 +139,7 @@ function embed_tanner_graph(G::Graphs.SimpleGraph, hw::Graphs.SimpleGraph; itera
         if w == 0
             Δ = local_cost(v, h) - local_cost(v, old)
         else
-            # swap v and w. The local costs treat an edge v–w as length 0 after the
-            # swap and count it twice before it; its true length is unchanged.
+            # an edge between v and w keeps its length under a swap; correct the local costs for it
             Δ = local_cost(v, h) - local_cost(v, old) + local_cost(w, old) - local_cost(w, h)
             w in nbrs[v] && (Δ += 2 * D[h, old])
         end
@@ -188,14 +179,11 @@ end
 Overhead of embedding the code's Tanner graph into the hardware connectivity. A
 Tanner edge of hardware length `L > 1` is non-native.
 
-- `:bridge`: `L − 1` dedicated bridge qubits per non-native edge (not shared), and
-  `2·(max L − 1)` extra CNOT layers per round (a CNOT through a chain of bridge
-  qubits, all edges in parallel).
-- `:swap`: no extra qubits, and `6·(max L − 1)` extra CNOT layers per round (SWAP
-  chains of 3 CNOTs each, there and back).
+- `:bridge`: `L - 1` bridge qubits per non-native edge and `2 * (max L - 1)` extra
+  CNOT layers per round.
+- `:swap`: no extra qubits and `6 * (max L - 1)` extra CNOT layers per round.
 
-These are deliberately simple, selectable models. `:all_to_all` hardware has zero
-overhead.
+`:all_to_all` hardware has no overhead.
 """
 function embedding_overhead(m::CodeModel, hw::HardwareModel; routing::Symbol = :bridge, iterations::Int = 20_000,
                             rng::AbstractRNG = Random.MersenneTwister(0))

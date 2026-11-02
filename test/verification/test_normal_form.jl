@@ -4,10 +4,10 @@
         _dense_dfs, ITEM_MEASURE, ITEM_ROTATION
     using LinearAlgebra
 
-    # Global-phase-insensitive equality of two unitaries.
+    # equality up to global phase
     phase_equal(A, B; atol=1e-9) = abs(abs(tr(A' * B)) - size(A, 1)) < atol * size(A, 1)
 
-    # POVM of a circuit on n data qubits, keyed by the final values of all written bits.
+    # POVM of a circuit, keyed by the final values of all written bits
     function circuit_povm(c, n)
         E = Dict{Vector{Bool},Matrix{ComplexF64}}()
         K0 = Matrix{ComplexF64}(I, 1 << n, 1 << n)
@@ -18,7 +18,7 @@
         E
     end
 
-    # POVM of the items of a normal form (frames are irrelevant for outcomes).
+    # POVM of the items of a normal form
     function items_povm(nf::NormalForm)
         n = nf.n
         E = Dict{Vector{Bool},Matrix{ComplexF64}}()

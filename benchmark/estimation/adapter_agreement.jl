@@ -1,15 +1,7 @@
-# E4 vs E5: analytic vs constructed adapter costs on several code pairs.
-#
-# Needs the universal-adapter construction (riteshbhirud/QuantumClifford.jl, master,
-# PR #742) in the active environment:
+# Analytic vs constructed adapter costs on several code pairs. Needs the adapter
+# construction from the riteshbhirud/QuantumClifford.jl fork (PR #742).
 #
 #     julia -tauto --project=<env with the fork and PBCCompiler> benchmark/estimation/adapter_agreement.jl
-#
-# Prints one row per pair: the constructed ancilla (new qubits + new checks), the
-# analytic join term alone (2d − 1, arXiv:2410.03628), and the analytic total (which
-# adds each block's auxiliary-graph assumption: one routing tile for surface codes,
-# and for BB codes the illustrative user choice `aux_graph_qubits = w -> 0`, so that
-# only the join term is compared).
 
 using PBCCompiler
 using PBCCompiler.ResourceEstimation

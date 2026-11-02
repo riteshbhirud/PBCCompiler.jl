@@ -1,5 +1,3 @@
-# Seeded random Clifford+T circuit generator for property tests and benchmarks.
-
 """
     random_clifford_t_circuit(rng, n; depth = 10n, t_density = 0.25, meas_density = 0.0,
                               cc_density = 0.0, multiqubit_density = 0.2,
@@ -19,8 +17,7 @@ A random circuit on qubits `1:n` built from the IR's own op types:
 - if `final_measure`, a Z measurement of every qubit at the end, into fresh bits.
 
 `sorted_qubits = true` keeps every qubit list sorted and every CNOT control below
-its target. This avoids the compiler bugs B1/B2 (see `docs/NOTES_FOR_COMPILER.md`)
-when a test wants to check the compiler's *correct* behaviour.
+its target, which avoids the known compiler bugs B1/B2 (see `docs/NOTES_FOR_COMPILER.md`).
 """
 function random_clifford_t_circuit(rng::AbstractRNG, n::Int; depth::Int = 10n, t_density::Real = 0.25,
                                    meas_density::Real = 0.0, cc_density::Real = 0.0,
@@ -75,7 +72,6 @@ function _random_qubits(rng::AbstractRNG, n::Int, k::Int, sorted::Bool)
     sorted ? sort!(qs) : qs
 end
 
-# A random non-identity Hermitian Pauli on k qubits with a random sign.
 function _random_hermitian(rng::AbstractRNG, k::Int)
     while true
         x = rand(rng, Bool, k); z = rand(rng, Bool, k)

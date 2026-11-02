@@ -8,7 +8,7 @@ using PBCCompiler.Verification: AffineBit, affine_var, isconstant, evaluate, sub
 @test isconstant(AffineBit(true)) && !isconstant(affine_var(1))
 @test evaluate(AffineBit(true, [1, 3]), [true, false, true]) == true
 @test evaluate(AffineBit(false, [1, 3]), Dict(1 => true, 3 => false)) == true
-# substitution: m1 -> 1 ⊕ m4, m3 -> m4
+# substitution m1 = 1 ⊕ m4, m3 = m4
 s = substitute(AffineBit(false, [1, 3]), v -> v == 1 ? AffineBit(true, [4]) : v == 3 ? affine_var(4) : affine_var(v))
 @test s == AffineBit(true)
 @test hash(AffineBit(true, [2, 1])) == hash(AffineBit(true, [1, 2]))

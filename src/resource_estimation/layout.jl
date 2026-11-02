@@ -1,5 +1,3 @@
-# E1: logical layout of data qubits onto code blocks.
-
 """
     LogicalLayout(code_blocks, qubit_to_block, qubit_within_block)
 
@@ -18,10 +16,9 @@ LogicalLayout(blocks::AbstractVector{<:CodeModel}, q2b::AbstractDict, q2i::Abstr
 """
     validate_layout(layout, qubits) -> Vector{String}
 
-Problems with a layout for the given logical qubits (empty if it is valid):
-- every qubit is mapped to an existing block;
-- no two qubits share a `(block, index)` slot;
-- each index lies in `1:k` of its block.
+Problems with a layout for the given logical qubits, empty if it is valid. A valid
+layout maps every qubit to an existing block, at an index in `1:k` of that block,
+with no two qubits in the same slot.
 """
 function validate_layout(layout::LogicalLayout, qubits)
     errs = String[]
@@ -73,8 +70,8 @@ end
 """
     interaction_graph(circuit, n_data) -> Dict{Tuple{Int,Int},Int}
 
-Logical interaction weights: for every measurement, every pair of data qubits
-(`≤ n_data`) in its Pauli support gets +1. Keys are `(a, b)` with `a < b`.
+Logical interaction weights: the number of measurements whose support contains both
+data qubits `a` and `b` (at most `n_data`), keyed by `(a, b)` with `a < b`.
 """
 function interaction_graph(c::AbstractVector{CircuitOp.Type}, n_data::Int)
     w = Dict{Tuple{Int,Int},Int}()
@@ -90,7 +87,6 @@ function interaction_graph(c::AbstractVector{CircuitOp.Type}, n_data::Int)
     w
 end
 
-"""Total interaction weight between qubits in different blocks."""
 function cross_block_weight(w::Dict{Tuple{Int,Int},Int}, q2b::Dict{Int,Int})
     sum((v for ((a, b), v) in w if q2b[a] != q2b[b]); init = 0)
 end
@@ -98,14 +94,10 @@ end
 """
     pack_by_interaction(circuit, models; n_data = width, refine = true, max_passes = 50) -> (layout, cross_weight)
 
-Assign the circuit's data qubits to blocks so as to keep strongly interacting
-qubits together. The interaction graph comes from the compiled circuit's
-measurements (edge weight = number of measurements touching both qubits).
-
-The assignment is greedy: qubits are placed in order of decreasing total weight,
-each into the block (with a free slot) where it has the most weight already. A
-Kernighan–Lin-style refinement then performs the best improving swap or move until
-none remains. Returns the layout and the remaining cross-block weight.
+Assign the circuit's data qubits to blocks so that qubits measured together often
+(see [`interaction_graph`](@ref)) share a block. With `refine = true`, a greedy
+assignment is improved by local swaps and moves for at most `max_passes` passes.
+Returns the layout and the remaining cross-block interaction weight.
 """
 function pack_by_interaction(c::AbstractVector{CircuitOp.Type}, models::AbstractVector{<:CodeModel};
                              n_data::Int = _est_width(c), refine::Bool = true, max_passes::Int = 50)
@@ -137,12 +129,12 @@ function pack_by_interaction(c::AbstractVector{CircuitOp.Type}, models::Abstract
             bestgain = 0; bestmove = nothing
             for q in 1:n_data
                 bq = q2b[q]
-                for b in eachindex(models)            # move into a free slot
+                for b in eachindex(models)
                     (b == bq || load[b] >= cap[b]) && continue
                     g = aff(q, b) - aff(q, bq)
                     g > bestgain && (bestgain = g; bestmove = (:move, q, b))
                 end
-                for r in q+1:n_data                   # swap with a qubit in another block
+                for r in q+1:n_data
                     br = q2b[r]
                     br == bq && continue
                     wqr = get(nbr[q], r, 0)

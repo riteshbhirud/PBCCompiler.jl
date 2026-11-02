@@ -1,12 +1,7 @@
-# Verification timing versus qubit count, T count and outcome count.
+# Verification time versus qubit count, T count and outcome count.
+# Writes results/timing.csv; plot it with plot_timing.jl.
 #
 #     julia -tauto --project=test benchmark/verification/timing.jl
-#
-# Families: approximate QFT-n, Cuccaro adders, seeded random Clifford+T circuits,
-# and the repository fixture. Each program is compiled with PBCCompiler and then
-# verified (normal-form path, oracles disabled). The best of three runs is
-# recorded. Writes benchmark/verification/results/timing.csv. Plot it with
-# plot_timing.jl.
 
 using PBCCompiler
 using PBCCompiler: parse_input
@@ -19,7 +14,7 @@ count_kind(c, k) = count(op -> _opkind(op) == k, c)
 
 function measure(family, param, input)
     compiled = PBCCompiler.preprocess_circuit(copy(input))
-    verify_compilation(input, compiled; oracle=:none)           # warm-up / compile
+    verify_compilation(input, compiled; oracle=:none)           # warm-up
     best = Inf; status = nothing
     for _ in 1:3
         t = @elapsed r = verify_compilation(input, compiled; oracle=:none)

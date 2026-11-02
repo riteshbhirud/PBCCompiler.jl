@@ -1,22 +1,11 @@
-# V6: stabilizer-state oracle (refutation only), using QuantumClifford's
-# GeneralizedStabilizer (sum over Cliffords), suited to mid-size instances with few
-# non-Clifford gates.
-#
-# For each trial: draw a random stabilizer input state, sample a visible outcome
-# record from the input program, and compute the record's probability *exactly*
-# (up to floating point) under both programs. Hidden outcomes (overwritten bits,
-# gadget outcomes) are summed by enumerating their branches. Forced outcomes are
-# applied as the (non-unitary) Pauli channel (I ± P)/2, so states stay unnormalized
-# and a probability is a ratio of traces. A probability difference beyond the
-# tolerance is a concrete witness. Agreement is never a proof.
-
 """
     StabilizerVerdict
 
-Result of [`stabilizer_oracle`](@ref): whether a difference was found, how many
-trials and records were checked, the largest probability difference seen, and
-(when refuted) the witness: the stabilizer input state on the data qubits, the
-visible record, and its probability under each program.
+Result of [`stabilizer_oracle`](@ref). `applicable` is false when the oracle
+could not run on these programs, `refuted` is true when it found a difference,
+`trials` is the number of trials run and `max_deviation` the largest probability
+difference seen. When refuted, `witness_state` (a stabilizer state on the data
+qubits), `witness_record`, `p_input` and `p_compiled` describe the difference.
 """
 struct StabilizerVerdict
     applicable::Bool
@@ -38,10 +27,8 @@ function _gs_clifford_rotation(P::PauliT, θ::Rational{Int}, N::Int)
     to_clifford(fwd)
 end
 
-# QuantumClifford 0.11.8's `apply!(::GeneralizedStabilizer, ::PauliChannel)` evaluates
-# `im^(phaseₗ − phaseᵣ + 4)` with a possibly negative exponent (DomainError) when a
-# channel Pauli carries a −1 sign. So Paulis enter channels with phase 0 only, and
-# the sign goes into the weights.
+# QuantumClifford 0.11.8 throws a DomainError in `apply!(::GeneralizedStabilizer, ::PauliChannel)`
+# when a channel Pauli has a -1 sign, so channel Paulis are kept unsigned and the sign goes into the weights.
 _unsigned(P::PauliT) = (P.phase[] == 0x00 ? (P, 1.0) : (_set_phase(P, 0), P.phase[] == 0x02 ? -1.0 : error("non-Hermitian Pauli")))
 
 function _gs_apply_rotation!(st, P::PauliT, θ::Rational{Int}, N::Int)
@@ -79,22 +66,16 @@ function _gs_apply_op!(st, op, N::Int, reg::Dict{Int,Bool})
     st
 end
 
-# Unnormalized forced projection onto outcome `outcome` of the Hermitian Pauli P (its
-# trace becomes the outcome probability). This uses QuantumClifford's own
-# measurement update (Yoder's in-place algorithm), which also updates the
-# stabilizer tableau and keeps χ small. Applying (I ± P)/2 as a Pauli channel would
-# leave the tableau fixed and make χ grow by up to 4× per measurement. The routine
-# is internal to QuantumClifford, so it is wrapped here, and the test suite
-# cross-checks the resulting probabilities against the dense oracle.
+# Unnormalized projection; its trace is the outcome probability. The internal QuantumClifford
+# routine updates the tableau, whereas applying (I ± P)/2 as a channel would grow χ up to 4x per measurement.
 function _gs_project(st, P::PauliT, outcome::Bool, N::Int)
     P0, sg = _unsigned(P)
-    res = (outcome ⊻ (sg < 0)) ? 1 : 0          # outcome of the unsigned P0
+    res = (outcome ⊻ (sg < 0)) ? 1 : 0
     first(QuantumClifford.PauliChannelNonClifford._projectrand_notnorm(copy(st), P0, res))
 end
 
 _gs_trace(st) = real(LinearAlgebra.tr(st))
 
-# Data state `s_data` on qubits 1:n, tensored with magic states on n+1:N.
 function _gs_initial(s_data, n::Int, N::Int, magic_k::Int)
     N == n && return QuantumClifford.GeneralizedStabilizer(s_data)
     magic = one(QuantumClifford.Stabilizer, N - n; basis = :X)
@@ -105,11 +86,8 @@ function _gs_initial(s_data, n::Int, N::Int, magic_k::Int)
     g
 end
 
-# Run program `c` from `st0`. `visible[op index] = bit` marks the measurements whose
-# outcome is part of the record. Their value is taken from `record` (bit ⇒ value,
-# xored with `flip[op index]`), or sampled from the aggregate branch probability
-# when `sample` is set and the bit is not in `record` yet. Every other measurement is
-# hidden, and all its branches are kept. Returns the total probability of the record.
+# Returns the probability of `record`. Measurements not in `visible` are summed over;
+# with `sample`, missing record bits are sampled first.
 function _gs_run(c, N::Int, st0, visible::Dict{Int,Int}, flip::Dict{Int,Bool}, record::Dict{Int,Bool},
                  sample::Bool, rng, max_branches::Int)
     branches = [(st0, Dict{Int,Bool}())]
@@ -159,14 +137,14 @@ end
     stabilizer_oracle(input, compiled; n_data, outcome_map = :identity, magic_k = 1, trials = 20,
                       rng = Random.default_rng(), max_branches = 256, tol = 1e-6) -> StabilizerVerdict
 
-Search for a difference between the two programs: for random stabilizer input
-states, sample a visible outcome record from the input and compare its exact
-probability under both programs. This oracle can only refute.
+Look for a difference between two programs. For random stabilizer input states,
+an outcome record is sampled from the input program and its probability is
+compared under both programs. Returns a [`StabilizerVerdict`](@ref). This oracle
+can only refute equivalence, never certify it.
 
-`outcome_map` must be `:identity` or a `Dict` whose values are single compiled bits
-(an `Int`, or an `AffineBit` with one variable and an optional constant). Parity
-maps are not supported here. With `:infer`, the identity map is used, and a
-difference is only evidence under that map.
+`outcome_map` must be `:identity` or a `Dict` whose values are single compiled
+bits (an `Int`, or an `AffineBit` with one variable and an optional constant).
+Parity maps are not supported.
 """
 function stabilizer_oracle(input::AbstractVector{CircuitOp.Type}, compiled::AbstractVector{CircuitOp.Type};
                            n_data::Int = _width(input), outcome_map = :identity, magic_k::Int = 1, trials::Int = 20,

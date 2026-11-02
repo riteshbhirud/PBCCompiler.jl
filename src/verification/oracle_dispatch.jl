@@ -1,6 +1,3 @@
-# Oracle fallback used by `verify_compilation` when the normal form does not decide.
-# Oracles only refute: a numerical agreement is reported as UNKNOWN.
-
 function _oracle_fallback(input, compiled, n; oracle, max_dense_qubits, max_branches, rng, semantics,
                           magic_k, outcome_map, stabilizer_trials, divergence, stats, reasons, visible_bits = nothing)
     N = max(n, _width(compiled), _width(input))
@@ -42,7 +39,6 @@ function _oracle_fallback(input, compiled, n; oracle, max_dense_qubits, max_bran
     cex = Counterexample(:stabilizer_oracle, divergence, ComplexF64[], sv.witness_state, sv.witness_record,
                          sv.p_input, sv.p_compiled, nothing, nothing, false, sv.note)
     if outcome_map === :infer
-        # a difference under the identity map does not refute every possible parity map
         stats[:identity_map_witness] = cex
         push!(reasons, "stabilizer oracle: the programs differ under the identity outcome map " *
                        "(p = $(sv.p_input) vs $(sv.p_compiled)); with outcome_map = :infer this does not rule out a parity map")

@@ -4,10 +4,7 @@
 Checks that a compiled PBC program implements the same logical operation as its
 input circuit, and finds counterexamples when it does not.
 
-The entry point is [`verify_compilation`](@ref). The verifier deliberately
-reuses none of the compiler's transformation code (only the `CircuitOp` data
-types and QuantumClifford.jl primitives), so a bug in a compiler pass cannot hide
-itself from the check.
+The entry point is [`verify_compilation`](@ref).
 """
 module Verification
 

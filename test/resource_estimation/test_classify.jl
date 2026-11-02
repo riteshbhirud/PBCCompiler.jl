@@ -13,7 +13,7 @@ am = AnalyticAdapterModel(cycle_time_factor=2.0)
 
 c = [C.Measurement(P"ZZ", 1, [1, 2]),              # cross-block
      C.Measurement(P"Z", 2, [1]),                  # intra
-     C.BitConditional(C.ExpQuatPiPauli(P"Z", [1]), 1),  # conditional Clifford → PPM, reads bit 1
+     C.BitConditional(C.ExpQuatPiPauli(P"Z", [1]), 1),  # conditional Clifford, reads bit 1
      C.BitConditional(C.ExpHalfPiPauli(P"X", [2]), 2)]  # Pauli frame
 ops = classify_operations(c, lay, hw; n_data=2, adapter_model=am)
 @test [o.class for o in ops] == [:cross, :intra, :intra, :free]

@@ -1,5 +1,3 @@
-# V1: static well-formedness / contract checks.
-
 """
     WellformednessIssue
 
@@ -51,12 +49,8 @@ Rules:
   bit index (no read-before-write, no dangling bit);
 - no classical bit is written by two measurements;
 - with `n_data` given, each magic qubit (index `> n_data`) is used only by
-  measurements: first by exactly one joint measurement together with data qubits,
-  then consumed by exactly one single-qubit measurement, with no use after that and
-  no use by a non-measurement op.
-
-The IR has no notion of simultaneous layers, so the "simultaneous measurements
-commute" rule is vacuous.
+  measurements: first by one joint measurement with data qubits, then by one
+  single-qubit measurement that consumes it, and never again after that.
 """
 check_wellformed(c::AbstractVector{CircuitOp.Type}; kwargs...) = map(string, wellformedness_issues(c; kwargs...))
 
@@ -135,7 +129,7 @@ function _check_op!(issues, i, op, nq, written; toplevel::Bool)
 end
 
 function _check_magic!(issues, c, n_data::Int)
-    # program-order uses of each magic qubit: (op index, role)
+    # magic qubit => [(op index, role)] in program order
     uses = Dict{Int,Vector{Tuple{Int,Symbol}}}()
     for (i, op) in enumerate(c)
         qs = _support(op)

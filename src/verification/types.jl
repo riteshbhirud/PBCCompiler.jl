@@ -1,10 +1,8 @@
-# Public result types of the verifier.
-
 """
     VerificationStatus
 
-`EQUIVALENT` (proved by a sound method), `NOT_EQUIVALENT` (a concrete witness
-was found), or `UNKNOWN` (neither, with reasons in the result's `stats[:reasons]`).
+`EQUIVALENT` (proved), `NOT_EQUIVALENT` (a concrete witness was found), or
+`UNKNOWN` (neither; the reasons are in the result's `stats[:reasons]`).
 """
 @enum VerificationStatus EQUIVALENT NOT_EQUIVALENT UNKNOWN
 
@@ -15,7 +13,7 @@ Evidence for an `EQUIVALENT` verdict:
 
 - `semantics` (`:outcomes` or `:channel`);
 - the canonical forms of the input and compiled programs;
-- the outcome map: input bit ⇒ affine function of compiled outcome variables. Each
+- the outcome map from each input bit to an affine function of compiled outcome variables. Each
   variable is the index of a compiled measurement op, and `variable_bits` gives
   its classical bit;
 - whether that map is the identity on bits;
@@ -41,7 +39,7 @@ A concrete witness for `NOT_EQUIVALENT`:
   items there (when the normal forms were built);
 - the input state, as a dense data-qubit vector (`input_state`) or as a stabilizer
   state (`input_stabilizer`);
-- `branch`: the visible outcome record (input bit ⇒ value), and the probability of
+- `branch`: the visible outcome record (input bit to value), and the probability of
   that record under the input (`prob_input`) and the compiled program
   (`prob_compiled`);
 - the minimized failing input and compiled programs (when minimization ran);

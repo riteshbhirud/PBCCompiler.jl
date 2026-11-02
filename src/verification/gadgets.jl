@@ -1,35 +1,13 @@
-# V4: gadget recognition (via GadgetShapes) and *semantic* proof ("lifting").
-#
-# For each recognized gadget with joint measurement (−1)^s·P_d⊗σ_a, magic
-# measurement (−1)^{s'}τ_a and corrections exp(-iπθᵢ Qᵢ) conditioned on the two
-# outcomes:
-#
-# 1. Let P = (−1)^s P_d (the signed data part). Synthesize a Clifford V with
-#    V P V† = +Z₁, as an explicit rotation sequence, and check it exactly.
-# 2. Conjugate the gadget by V: the joint measurement becomes Z₁⊗σ, and each
-#    correction Pauli Qᵢ must map to εᵢZ₁ (otherwise the gadget does not rotate
-#    about P and is rejected).
-# 3. The reduced gadget acts on data qubit 1 and the magic qubit only. Prove it in
-#    exact Q(ζ₈) arithmetic over all four outcome branches: every branch's data Kraus
-#    operator must be (scalar)·Z^{r_b}·exp(-iπθZ) with one θ for all branches, the
-#    branch weights must sum to the identity, and r_b must be affine in (b1, b2).
-# 4. Emit exp(-iπθ P) and the residual Pauli frame P^{r(b1,b2)}. The gadget's own
-#    outcome variables stay as free variables of that frame, and are otherwise
-#    hidden.
-#
-# Proofs are cached by (template, reduced shape, magic state). Only step 1 is per
-# instance.
-
 using ..GadgetShapes: GadgetTemplate, GADGET_TEMPLATES, GadgetMatch, find_gadgets
 
 """
     GadgetProof
 
-Result of the exact proof of a reduced gadget: whether it succeeded (`ok`), the
-reason when it did not, the rotation angle θ (units of π, in [0, 1/2)), the
-residual frame `r = c₀ ⊕ c₁·b1 ⊕ c₂·b2` as `(c₀, c₁, c₂)`, and the
-state-independent probability of each outcome branch `(b1, b2)` (in the order
-00, 01, 10, 11), as exact field elements.
+Result of [`prove_reduced_gadget`](@ref). Fields: `ok`, `reason` (why the proof
+failed, empty on success), `angle` (the rotation angle in units of π, in
+[0, 1/2)), `residual` (the coefficients `(c0, c1, c2)` of the residual frame
+`c0 + c1*b1 + c2*b2` mod 2) and `branch_probs` (the probability of each outcome
+branch `(b1, b2)`, in the order 00, 01, 10, 11).
 """
 struct GadgetProof
     ok::Bool
@@ -47,7 +25,7 @@ const _Y2 = [Cyc8(0) -zeta(2); zeta(2) Cyc8(0)]
 const _Z2 = [Cyc8(1) Cyc8(0); Cyc8(0) Cyc8(-1)]
 _letter_matrix(l::Char) = l == 'X' ? _X2 : l == 'Y' ? _Y2 : l == 'Z' ? _Z2 : _I2
 
-# Kronecker product with `A` as the outer (most significant) factor.
+# `A` is the most significant factor.
 function _ckron(A::Matrix{Cyc8}, B::Matrix{Cyc8})
     ra, ca = size(A); rb, cb = size(B)
     C = fill(Cyc8(0), ra * rb, ca * cb)
@@ -57,13 +35,12 @@ function _ckron(A::Matrix{Cyc8}, B::Matrix{Cyc8})
     C
 end
 
-# Normalized eigenvector of the single-qubit Pauli `l` with eigenvalue (−1)^b, exactly.
 function _eigvec(l::Char, b::Bool)
     if l == 'Z'
         return b ? reshape([Cyc8(0), Cyc8(1)], 2, 1) : reshape([Cyc8(1), Cyc8(0)], 2, 1)
     elseif l == 'X'
         return reshape([INV_SQRT2, b ? -INV_SQRT2 : INV_SQRT2], 2, 1)
-    else # 'Y': eigenvalue +1 ↔ (1, i)/√2
+    else
         return reshape([INV_SQRT2, (b ? -zeta(2) : zeta(2)) * INV_SQRT2], 2, 1)
     end
 end
@@ -73,21 +50,23 @@ _projector(O::Matrix{Cyc8}, b::Bool) = [(i == j ? Cyc8(1 // 2) : Cyc8(0)) + (b ?
 """
     prove_reduced_gadget(joint_letter, magic_letter, magic_sign, corrections, magic_k) -> GadgetProof
 
-Exact proof of a gadget reduced to one data qubit (`Z ≡ P`) and one magic qubit,
-prepared in `(|0⟩ + ζ₈^magic_k |1⟩)/√2`. The joint measurement is `σ⊗Z`, with
-`σ = joint_letter` on the magic qubit. The magic measurement is
-`(−1)^magic_sign · magic_letter`. `corrections` lists `(θ, role)`: apply
-`exp(-iπθ Z)` to the data qubit if outcome `role` (1 = joint, 2 = magic) is 1.
+Check a gadget reduced to one data qubit and one magic qubit prepared in
+`(|0⟩ + exp(iπ magic_k/4)|1⟩)/√2`, and return a [`GadgetProof`](@ref).
+
+The joint measurement is `joint_letter` on the magic qubit times `Z` on the data
+qubit. The magic measurement is `magic_letter`, negated when `magic_sign` is
+true. `corrections` lists pairs `(θ, role)`: apply `exp(-iπθ Z)` to the data
+qubit when outcome `role` (1 for the joint measurement, 2 for the magic one) is 1.
 """
 function prove_reduced_gadget(joint_letter::Char, magic_letter::Char, magic_sign::Bool,
                               corrections::Vector{Tuple{Rational{Int},Int}}, magic_k::Int)
     for (θ, _) in corrections
         isinteger(8θ) || return _fail("correction angle $(θ)π is not a multiple of π/8")
     end
-    J = _ckron(_letter_matrix(joint_letter), _Z2)                       # index = d + 2m
+    J = _ckron(_letter_matrix(joint_letter), _Z2)
     Tm = _ckron(magic_sign ? -1 * _letter_matrix(magic_letter) : _letter_matrix(magic_letter), _I2)
     ketm = reshape([INV_SQRT2, zeta(magic_k) * INV_SQRT2], 2, 1)
-    M0 = _ckron(ketm, _I2)                                             # |d⟩ ↦ |m⟩⊗|d⟩
+    M0 = _ckron(ketm, _I2)
     θs = Dict{Tuple{Bool,Bool},Rational{Int}}()
     probs = Cyc8[]
     sumα = Cyc8(0); sumβ = Cyc8(0)
@@ -96,7 +75,7 @@ function prove_reduced_gadget(joint_letter::Char, magic_letter::Char, magic_sign
         M = _cmatmul(_projector(Tm, b2), M)
         for (θ, role) in corrections
             (role == 1 ? b1 : b2) || continue
-            D = [Cyc8(1) Cyc8(0); Cyc8(0) zeta(Int(8θ))]             # ∝ exp(-iπθZ)
+            D = [Cyc8(1) Cyc8(0); Cyc8(0) zeta(Int(8θ))]
             M = _cmatmul(_ckron(_I2, D), M)
         end
         e = _eigvec(magic_letter, b2 ⊻ magic_sign)
@@ -111,7 +90,7 @@ function prove_reduced_gadget(joint_letter::Char, magic_letter::Char, magic_sign
         pα == pβ || return _fail("branch ($(Int(b1)),$(Int(b2))) is not unitary on the data (|⟨0|K|0⟩|² ≠ |⟨1|K|1⟩|²), e.g. a wrong magic state or measurement basis")
         j = zeta_exponent(β / α)
         j === nothing && return _fail("branch ($(Int(b1)),$(Int(b2))) applies a relative phase that is not a multiple of π/4")
-        θs[(b1, b2)] = _normalize_angle(j // 8)                            # diag(1, ζʲ) ∝ exp(-iπ(j/8)Z)
+        θs[(b1, b2)] = _normalize_angle(j // 8)                            # diag(1, ζ^j) is proportional to exp(-iπ(j/8)Z)
     end
     (sumα == Cyc8(1) && sumβ == Cyc8(1)) || return _fail("the branch Kraus operators do not sum to a trace-preserving map")
     isempty(θs) && return _fail("every branch has probability zero")
@@ -146,11 +125,9 @@ end
 """
     synthesize_z1_clifford(p::PauliOperator) -> (rotations, map)
 
-A Clifford `V` with `V p V† = +Z₁`, for a Hermitian non-identity Pauli `p`. It is
-returned as a list of rotations `(Q, k)` meaning `exp(-ikπ/4·Q)` (applied in
-order), together with its forward `PauliMap`. The construction maps every X or Y
-letter to Z, folds the Z support onto one qubit with CNOTs, moves that qubit to
-position 1 with two CNOTs, and fixes the sign with an X.
+Return a Clifford `V` with `V p V† = +Z₁`, for a Hermitian non-identity Pauli `p`.
+`rotations` is a list of pairs `(Q, k)`, each meaning `exp(-ikπQ/4)`, applied in
+order, and `map` is the corresponding [`PauliMap`](@ref).
 """
 function synthesize_z1_clifford(p::PauliOperator)
     n = nqubits(p)
@@ -161,25 +138,25 @@ function synthesize_z1_clifford(p::PauliOperator)
     function rot!(q, k)
         push!(rots, (q, k)); rotate!(fwd, inv, q, k)
     end
-    # CNOT(c, t) ∝ (Z_c)_{π/4} (X_t)_{π/4} (Z_c X_t)_{−π/4}
+    # CNOT(c, t) is proportional to (Z_c)_{π/4} (X_t)_{π/4} (Z_c X_t)_{-π/4}
     cnot!(c, t) = (rot!(single('Z', c), 1); rot!(single('X', t), 1); rot!(single('Z', c) * single('X', t), 3))
     for j in 1:n
         x, z = p[j]
         x || continue
-        rot!(z ? single('X', j) : single('Y', j), 1)       # Y ↦ ±Z via X-rotation, X ↦ ±Z via Y-rotation
+        rot!(z ? single('X', j) : single('Y', j), 1)
     end
     cur = apply_map(fwd, p)
     S = [j for j in 1:n if cur[j][2]]
     t = S[1]
     for a in S[2:end]
-        cnot!(a, t)                                         # Z_a Z_t ↦ Z_t
+        cnot!(a, t)
     end
     if t != 1
-        cnot!(1, t)                                         # Z_t ↦ Z₁Z_t
-        cnot!(t, 1)                                         # Z₁Z_t ↦ Z₁
+        cnot!(1, t)
+        cnot!(t, 1)
     end
     cur = apply_map(fwd, p)
-    cur.phase[] == 0x02 && rot!(single('X', 1), 2)           # −Z₁ ↦ +Z₁
+    cur.phase[] == 0x02 && rot!(single('X', 1), 2)
     apply_map(fwd, p) == single('Z', 1) || error("internal: Clifford synthesis failed for $p")
     (rots, fwd)
 end
@@ -187,11 +164,10 @@ end
 """
     LiftedGadget
 
-A gadget whose action was proved: it implements `exp(-iπ·angle·data_pauli)`
-followed by the residual frame `data_pauli^residual` (`residual` is affine in the
-gadget's outcome variables). `clifford_V` is the rotation sequence of the
-synthesized Clifford `V` with `V·data_pauli·V† = Z₁`, and `proof_key` is the
-key of the cached exact proof.
+A gadget whose action was proved. It implements `exp(-iπ angle data_pauli)`
+followed by the Pauli `data_pauli^residual`, where `residual` is an affine
+function of the gadget's outcomes. `clifford_V` is the rotation sequence of a
+Clifford `V` with `V data_pauli V† = Z₁`.
 """
 struct LiftedGadget
     match::GadgetMatch
@@ -228,9 +204,10 @@ _letter_of(p::PauliOperator, j::Int) = (x = p[j][1]; z = p[j][2]; x ? (z ? 'Y' :
 """
     lift_gadgets(c, n_data; magic_k = 1, templates = GADGET_TEMPLATES) -> LiftingResult
 
-Recognize the magic-state gadgets of a compiled program (qubits `> n_data` are
-magic qubits in `(|0⟩ + ζ₈^magic_k|1⟩)/√2`; `magic_k = 1` is PBCCompiler's `T|+⟩`)
-and prove each one exactly. See the file header for the method.
+Find the magic-state gadgets of a compiled program and prove what each one
+implements. Qubits above `n_data` are magic qubits prepared in
+`(|0⟩ + exp(iπ magic_k/4)|1⟩)/√2`; the default `magic_k = 1` is the `T|+⟩` state
+PBCCompiler uses.
 """
 function lift_gadgets(c::AbstractVector{CircuitOp.Type}, n_data::Int; magic_k::Int = 1, templates = GADGET_TEMPLATES)
     lifted = LiftedGadget[]; failed = GadgetFailure[]
@@ -255,7 +232,6 @@ function _lift_one(c, g::GadgetMatch, n_data::Int, magic_k::Int)
     apos = findfirst(==(g.magic_qubit), jq)
     apos === nothing && return GadgetFailure(g, "internal: magic qubit not in the joint measurement")
     joint_letter = _letter_of(jp, apos)
-    # signed data part: everything except the magic position, carrying the overall sign
     dpos = [j for j in eachindex(jq) if j != apos]
     dp = PauliOperator(jp.phase[], [jp[j][1] for j in dpos], [jp[j][2] for j in dpos])
     P = embed(n_data, jq[dpos], dp)

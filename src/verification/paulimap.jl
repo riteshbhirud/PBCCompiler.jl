@@ -1,17 +1,3 @@
-# Clifford frames as maps on Pauli operators.
-#
-# A Clifford unitary U is determined up to a global phase by its conjugation action
-# on the generators X₁…Xₙ, Z₁…Zₙ. `PauliMap` stores those 2n images (with signs).
-# The normal form keeps two maps for the frame F: `fwd(P) = F P F†` and
-# `inv(P) = F† P F`, both updated in O(n) Pauli products per Clifford rotation.
-#
-# Update rules for G = exp(-i k π/4 · Q), k ∈ {1, 2, 3}. All of them follow from
-# "e anticommutes with Q ⇒ exp(-iθQ) e = e exp(iθQ)":
-#   forward  (F ← G F):  fwd(e) = r  ↦  G r G† = r·exp(2iθQ)  if {r, Q} = 0
-#                          k=1: i r Q     k=3: −i r Q     k=2: −r
-#   inverse:             inv(e) ↦ inv(G† e G),  G† e G = e·exp(−2iθQ)  if {e, Q} = 0
-#                          k=1: −i inv(e) inv(Q)   k=3: i inv(e) inv(Q)   k=2: −inv(e)
-
 """
     PauliMap
 
@@ -42,8 +28,7 @@ _set_phase(p::PauliT, ph::Integer) = (q = copy(p); q.phase[] = UInt8(mod(ph, 4))
 """
     apply_map(m::PauliMap, p::PauliOperator) -> PauliOperator
 
-The image of `p` under the Clifford map, with the exact phase. Uses the
-decomposition `p = i^(phase + #Y) ∏ⱼ Xⱼ^{xⱼ} Zⱼ^{zⱼ}` (X before Z on each qubit).
+The image of `p` under the Clifford map, including its phase.
 """
 function apply_map(m::PauliMap, p::PauliOperator)
     n = m.n
@@ -64,7 +49,7 @@ function apply_map(m::PauliMap, p::PauliOperator)
     r
 end
 
-# Whether generator `idx` (Xⱼ for idx ≤ n, Zⱼ otherwise) anticommutes with q.
+# generator idx is Xⱼ for idx ≤ n, Zⱼ otherwise
 function _generator_anticommutes(n::Int, idx::Int, q::PauliOperator)
     if idx <= n
         return q[idx][2]          # Xⱼ anticommutes with q iff q has Z on j
@@ -73,6 +58,7 @@ function _generator_anticommutes(n::Int, idx::Int, q::PauliOperator)
     end
 end
 
+# if {r, q} = 0 then G r G† = r exp(2iθq) for G = exp(-iθq)
 """
     rotate!(fwd::PauliMap, inv::PauliMap, q::PauliOperator, k::Integer)
 
@@ -115,8 +101,7 @@ to_clifford(m::PauliMap) = CliffordOperator(m.img)
     pauli_sign_conjugate_inv!(inv::PauliMap, f::PauliOperator)
 
 Update the forward map `P ↦ F P F†` (resp. the inverse map `P ↦ F† P F`) for
-`F ← f F` with `f` a Pauli. Forward: an image that anticommutes with `f` changes
-sign. Inverse: the image of a generator that anticommutes with `f` changes sign.
+`F ← f F` with `f` a Pauli.
 """
 function pauli_sign_conjugate_fwd!(m::PauliMap, f::PauliOperator)
     for idx in 1:2m.n

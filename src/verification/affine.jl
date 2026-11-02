@@ -1,10 +1,3 @@
-# Affine functions over F2 of measurement-outcome variables.
-#
-# A value `c ⊕ x_{v1} ⊕ x_{v2} ⊕ …` is stored as the constant `c` plus the sorted,
-# duplicate-free list of variable ids. Variable ids are opaque integers; the normal
-# form uses one id per measurement *write* (so a classical bit that is overwritten
-# gets a fresh id for each write).
-
 """
     AffineBit(constant::Bool, vars)
 
@@ -12,7 +5,7 @@ An affine function over F2 of outcome variables: `constant ⊕ (⊕ᵢ x_{vars[i
 
 `vars` is normalized to a sorted list with every variable appearing at most once
 (a variable listed twice cancels). Supports `⊻` (addition over F2), evaluation on
-an assignment, and structural equality, which coincides with equality as functions.
+an assignment, and equality.
 
 ```jldoctest
 julia> using PBCCompiler.Verification: AffineBit, affine_var
@@ -29,7 +22,6 @@ struct AffineBit
     vars::Vector{Int}
     function AffineBit(constant::Bool, vars::AbstractVector{<:Integer})
         v = sort!(collect(Int, vars))
-        # drop pairs (x ⊕ x = 0)
         out = Int[]
         i = 1
         while i <= length(v)
@@ -65,7 +57,6 @@ Whether `a` does not depend on any outcome variable.
 """
 isconstant(a::AffineBit) = isempty(a.vars)
 
-# Symmetric difference of two sorted, duplicate-free vectors.
 function _symdiff_sorted(a::Vector{Int}, b::Vector{Int})
     out = Vector{Int}(undef, 0)
     sizehint!(out, length(a) + length(b))
@@ -88,7 +79,7 @@ function _symdiff_sorted(a::Vector{Int}, b::Vector{Int})
     out
 end
 
-# Internal constructor that trusts its input to be sorted and duplicate-free.
+# skips normalization; `v` must already be sorted and duplicate-free
 _affine_unchecked(c::Bool, v::Vector{Int}) = (r = AffineBit(c); append!(r.vars, v); r)
 
 Base.xor(a::AffineBit, b::AffineBit) = _affine_unchecked(a.constant ⊻ b.constant, _symdiff_sorted(a.vars, b.vars))
@@ -98,7 +89,7 @@ Base.xor(b::Bool, a::AffineBit) = xor(a, b)
 """
     affine_and_const(a::AffineBit, b::Bool) -> AffineBit
 
-`a` if `b` is true, the zero function otherwise (multiplication by a constant bit).
+`a` if `b` is true, the zero function otherwise.
 """
 affine_and_const(a::AffineBit, b::Bool) = b ? a : AffineBit(false)
 

@@ -1,33 +1,15 @@
-# V6: exact dense oracle for small instances (floating point, tolerance-based).
-#
-# The input program's visible POVM {E_in[b]} (b = final values of the bits it
-# writes) is compared with the compiled program's raw POVM {E_out[r]} (r = the
-# outcomes of *all* its measurements, including hidden gadget outcomes), through an
-# outcome map M: input bit j = cⱼ ⊕ ⟨Sⱼ, r⟩. Equivalence under M means
-#     E_in[b] = Σ_{r : M(r) = b} E_out[r]   for every b,
-# or equivalently, in the Walsh basis (V_T = Σ_b (−1)^{⟨T,b⟩} E_in[b],
-# W_S = Σ_r (−1)^{⟨S,r⟩} E_out[r]):
-#     V_T = (−1)^{⟨c,T⟩} W_{⊕_{j∈T} Sⱼ}   for every subset T of input bits.
-# With `outcome_map = :infer`, candidate (Sⱼ, cⱼ) are found from the single-bit
-# conditions, then checked on every T. A refutation therefore means that *no*
-# affine outcome map works. Being floating point, this oracle can refute but never
-# certify.
-
 """
     DenseVerdict
 
-Result of [`dense_oracle`](@ref):
+Result of [`dense_oracle`](@ref).
 
-- `decided`: every branch was enumerated within the limits;
-- `agree`: some admissible outcome map reproduces the input's outcome
-  distribution, and the post-measurement channel too for `:channel`;
-- `outcome_map`: that map (input bit ⇒ affine function of compiled measurement-op
-  variables);
-- `max_deviation`: largest entrywise deviation under the best map tried;
-- branch counts;
-- a witness when they disagree: the input record, a dense input state, and the
-  record's probability under each program;
-- `note`.
+- `decided`: the oracle finished within its limits.
+- `agree`: an allowed outcome map reproduces the input's outcome distribution (and its channel, for `:channel`).
+- `outcome_map`: that map, from input bits to affine functions of compiled measurement ops.
+- `max_deviation`: largest entrywise deviation under the best map tried.
+- `leaves_input`, `leaves_compiled`: number of outcome branches simulated.
+- `witness_record`, `witness_state`, `p_input`, `p_compiled`: when the programs disagree, an outcome record, an input state, and the record's probability under each program.
+- `note`: a short explanation.
 """
 struct DenseVerdict
     decided::Bool
@@ -45,7 +27,6 @@ end
 
 _undecided(note) = DenseVerdict(false, false, nothing, NaN, 0, 0, Dict{Int,Bool}(), ComplexF64[], NaN, NaN, note)
 
-# op index of the last top-level measurement writing each bit
 function _final_writes(c)
     fw = Dict{Int,Int}()
     for (i, op) in enumerate(c)
@@ -60,11 +41,13 @@ _measurement_ops(c) = [i for (i, op) in enumerate(c) if _opkind(op) == OP_MEASUR
     dense_oracle(input, compiled; n_data, semantics = :outcomes, outcome_map = :identity,
                  magic_k = 1, max_qubits = 10, max_branches = 4096, tol = 1e-9) -> DenseVerdict
 
-Compare two programs exactly (up to floating point) by dense simulation of every
-outcome branch. Compiled qubits above `n_data` are magic qubits, prepared in
-`(|0⟩ + ζ₈^magic_k|1⟩)/√2` (in either program). `outcome_map` is `:identity`,
-`:infer` (search all affine maps), or a `Dict` input bit ⇒ `AffineBit` over compiled
-bits. `visible_bits` selects the input bits forming the record (default: all).
+Compare two small programs by dense simulation of every outcome branch, and
+return a [`DenseVerdict`](@ref). Qubits above `n_data` are magic qubits prepared
+in `(|0⟩ + exp(iπ magic_k/4)|1⟩)/√2`. `outcome_map` is `:identity`, `:infer` (try
+every affine map), or a `Dict` from input bits to `AffineBit`s over compiled bits.
+`visible_bits` selects the input bits to compare (default: all of them).
+
+The oracle works in floating point, so it can refute equivalence but never certify it.
 """
 function dense_oracle(input::AbstractVector{CircuitOp.Type}, compiled::AbstractVector{CircuitOp.Type};
                       n_data::Int = _width(input), semantics::Symbol = :outcomes, outcome_map = :identity,
@@ -75,7 +58,6 @@ function dense_oracle(input::AbstractVector{CircuitOp.Type}, compiled::AbstractV
     Nin = max(n, _width(input))
     max(N, Nin) <= max_qubits || return _undecided("$(max(N, Nin)) qubits exceed the dense limit $max_qubits")
     D = 1 << n
-    # ---- input visible POVM (and Kraus lists for the channel semantics)
     fw_in = _final_writes(input)
     bits = visible_bits === nothing ? sort!(collect(keys(fw_in))) : sort!(collect(Int, visible_bits))
     all(b -> haskey(fw_in, b), bits) || return _undecided("a visible bit is never written by the input")
@@ -88,7 +70,7 @@ function dense_oracle(input::AbstractVector{CircuitOp.Type}, compiled::AbstractV
             b = sum((reg[bits[j]] ? 1 : 0) << (j - 1) for j in 1:v; init = 0)
             Ein[b + 1] .+= K' * K
             if semantics == :channel
-                for m in 0:(1 << (Nin - n))-1           # trace out magic qubits
+                for m in 0:(1 << (Nin - n))-1
                     push!(Kin[b + 1], K[[(m << n) + j + 1 for j in 0:D-1], :])
                 end
             end
@@ -98,7 +80,6 @@ function dense_oracle(input::AbstractVector{CircuitOp.Type}, compiled::AbstractV
         return _undecided("input not simulable: " * err.msg)
     end
     done_in || return _undecided("input has more than $max_branches outcome branches")
-    # ---- compiled raw POVM
     mops = _measurement_ops(compiled)
     R = length(mops)
     R <= 20 || return _undecided("compiled program has too many measurements ($R) for the dense oracle")
@@ -115,7 +96,7 @@ function dense_oracle(input::AbstractVector{CircuitOp.Type}, compiled::AbstractV
             Eout[r] = get(Eout, r, zeros(ComplexF64, D, D)) + K' * K
             if semantics == :channel
                 lst = get!(Kout, r, Matrix{ComplexF64}[])
-                for m in 0:(1 << (N - n))-1         # trace out the magic qubits
+                for m in 0:(1 << (N - n))-1
                     rows = [(m << n) + j + 1 for j in 0:D-1]
                     push!(lst, K[rows, :])
                 end
@@ -128,7 +109,7 @@ function dense_oracle(input::AbstractVector{CircuitOp.Type}, compiled::AbstractV
     done_out || return _undecided("compiled program has more than $max_branches outcome branches")
 
     fw_out = _final_writes(compiled)
-    # candidate maps: (S, c) per input bit, with S a bitmask over raw positions
+    # A map is (S, c) per input bit, with S a bitmask over compiled measurement positions.
     function fixed_map(spec)
         Ss = zeros(Int, v); cs = falses(v)
         for (j, bit) in enumerate(bits)
@@ -166,7 +147,6 @@ function dense_oracle(input::AbstractVector{CircuitOp.Type}, compiled::AbstractV
     candidates = Tuple{Vector{Int},BitVector}[]
     complete = true
     if outcome_map === :infer
-        # try the identity map first; search the affine maps only if it fails
         fm = fixed_map(:identity)
         if fm !== nothing
             G = mapped_povm(fm...)
@@ -176,7 +156,7 @@ function dense_oracle(input::AbstractVector{CircuitOp.Type}, compiled::AbstractV
         end
         if isempty(candidates)
             complete = _infer_maps!(candidates, Ein, Eout, v, R, D, tol)
-            fm === nothing || push!(candidates, fm)        # used for the witness if nothing matches
+            fm === nothing || push!(candidates, fm)
         end
     else
         fm = fixed_map(outcome_map)
@@ -195,7 +175,6 @@ function dense_oracle(input::AbstractVector{CircuitOp.Type}, compiled::AbstractV
         d < bestdev && (bestdev = d; best = (Ss, cs, G))
     end
     complete || return _undecided("the identity map does not match and the affine outcome-map search exceeded its limits")
-    # disagreement: witness under the best (or identity) map
     if best === nothing
         fm = fixed_map(:identity)
         fm === nothing && return _dense_verdict_nomap(nin, nout, bits, outcome_map)
@@ -226,16 +205,15 @@ function _dense_verdict_nomap(nin, nout, bits, outcome_map)
                  "the compiled program does not write every bit the outcome map ($(outcome_map)) refers to")
 end
 
-# Search all affine outcome maps through the Walsh transforms (see the file header).
-# Appends every map that satisfies all Walsh conditions to `candidates`. Returns
-# whether the search was exhaustive (false if a size limit cut it short).
+# Map M (bit j = c_j + <S_j, r>) works iff V_T = (-1)^<c,T> W_(xor of S_j, j in T) for
+# every subset T, with V, W the Walsh transforms of the input and compiled POVMs.
+# Returns false if a size limit cut the search short.
 function _infer_maps!(candidates, Ein, Eout, v, R, D, tol; max_combos::Int = 4096)
     (R <= 14 && (1 << R) * D * D <= (1 << 23)) || return false
     W = zeros(ComplexF64, D, D, 1 << R)
     for (r, E) in Eout
         W[:, :, r + 1] .= E
     end
-    # fast Walsh–Hadamard transform along the third dimension
     h = 1
     while h < (1 << R)
         for i in 0:2h:(1 << R)-1, j in i:i+h-1
@@ -255,10 +233,9 @@ function _infer_maps!(candidates, Ein, Eout, v, R, D, tol; max_combos::Int = 409
             maximum(abs, Vj - WS) <= tol && push!(perbit[j], (S, false))
             maximum(abs, Vj + WS) <= tol && push!(perbit[j], (S, true))
         end
-        isempty(perbit[j]) && return true          # no map can exist
+        isempty(perbit[j]) && return true
     end
     VT = [V(T) for T in 0:(1 << v)-1]
-    # backtracking over bits: after fixing bit j, check every T ⊆ {1..j} that contains j
     chosen = Vector{Tuple{Int,Bool}}(undef, v)
     nodes = Ref(0)
     exhausted = Ref(false)
@@ -294,8 +271,8 @@ function _infer_maps!(candidates, Ein, Eout, v, R, D, tol; max_combos::Int = 409
     !exhausted[] || !isempty(candidates)
 end
 
-# Channel semantics: per visible record, compare the Choi matrices of the two Kraus
-# sets via ‖J_in − J_out‖²_F = Σ|⟨aᵢ,aⱼ⟩|² + Σ|⟨bᵢ,bⱼ⟩|² − 2Σ|⟨aᵢ,bⱼ⟩|².
+# ||J_a - J_b||_F^2 = sum|<a_i,a_j>|^2 + sum|<b_i,b_j>|^2 - 2 sum|<a_i,b_j>|^2 for the
+# Choi matrices of Kraus sets a and b.
 function _channels_match(Kin, Kout, Ss, cs, v, tol)
     groups = [Matrix{ComplexF64}[] for _ in 1:(1 << v)]
     for (r, lst) in Kout

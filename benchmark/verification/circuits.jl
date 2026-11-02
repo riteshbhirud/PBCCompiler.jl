@@ -1,9 +1,5 @@
-# Benchmark circuit families in PBCCompiler's IR (shared by the verification and
-# estimation benchmark scripts).
-#
-# CNOTs whose control index exceeds the target index are emitted as
-# (H⊗H)·CNOT(t→c)·(H⊗H), an exact identity, so that compiler bug B1 (see
-# docs/NOTES_FOR_COMPILER.md) does not turn every benchmark into a refutation.
+# Benchmark circuit families for the verification and estimation scripts.
+# Reversed CNOTs go through the Hadamard identity to avoid compiler bug B1.
 
 using PBCCompiler: CircuitOp
 using QuantumClifford: PauliOperator
@@ -30,7 +26,7 @@ function bm_toffoli(a, b, c)
          bm_t(b), bm_t(c), bm_h(c), bm_cnot(a, b), bm_t(a), bm_tdg(b), bm_cnot(a, b))
 end
 
-"""Approximate QFT on n qubits keeping only the controlled-S (R₂) rotations (exact in Clifford+T)."""
+"""Approximate QFT on n qubits keeping only the controlled-S rotations."""
 function approx_qft(n)
     c = CircuitOp.Type[]
     for j in 1:n
@@ -42,9 +38,8 @@ function approx_qft(n)
 end
 
 """
-Cuccaro ripple-carry adder on two k-bit registers plus a carry-in and a carry-out
-(n = 2k + 2 qubits), with Toffolis decomposed into Clifford+T. All qubits are
-measured at the end.
+Cuccaro ripple-carry adder on two k-bit registers plus carry-in and carry-out
+(2k + 2 qubits), with all qubits measured at the end.
 """
 function cuccaro_adder(k)
     # layout: cin = 1, a_i = 2i, b_i = 2i + 1 (i = 1..k), cout = 2k + 2
